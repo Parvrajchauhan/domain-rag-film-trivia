@@ -50,3 +50,10 @@ documents to improve factual accuracy and transparency.
 - Retrieval Precision@K
 - Manual hallucination checks
 - User correctness study
+
+
+Embedding: sentence-transformers/all-MiniLM-L6-v2
+Vector DB: FAISS
+Generator: google/flan-t5-base
+Backend: FastAPI
+Frontend:  Next.js
