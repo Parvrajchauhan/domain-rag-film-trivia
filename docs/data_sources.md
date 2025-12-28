@@ -3,13 +3,9 @@
 2. **Wikipedia** - Plot, production, reception
 
 ## Tier 2 (Enhanced Trivia)
-3. **Box Office Mojo** - Revenue, rankings
-4. **Oscars.org** - Award nominations/wins
-5. **IMDb Trivia/Goofs** - Fun facts
+3. **IMDb** — Awards (event-based) + Box Office (UPDATED DOM)
+4. **IMDb Trivia/Goofs** - Fun facts
 
-## Tier 3 (Unique Value)
-6. **Director interviews** - Behind-the-scenes insights
-7. **Scripts (IMSDB)** - Famous quotes/dialogue
 
 
 ## Scope limits (v1)
