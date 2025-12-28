@@ -7,3 +7,8 @@ node_modules/
 data/raw/*
 data/processed/*
 *.ipynb_checkpoints
+
+# Ignore raw Kaggle movie metadata
+data/movie_catalog/movie_metadata.csv
+# Ignore raw datasets
+data/raw/
