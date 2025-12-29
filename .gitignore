@@ -12,3 +12,4 @@ data/processed/*
 data/movie_catalog/movie_metadata.csv
 # Ignore raw datasets
 data/raw/
+data/inbetween
