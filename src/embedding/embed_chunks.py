@@ -71,7 +71,8 @@ def embed_chunks(chunks_df: pd.DataFrame):
 
     np.save(os.path.join(OUTPUT_DIR, "embeddings.npy"), embeddings)
 
-    meta_df = chunks_df.drop(columns=["text"])
+    meta_df = chunks_df
+    meta_df.insert(0, "vector_id", np.arange(len(meta_df), dtype=np.int64))
     meta_df.to_parquet(
         os.path.join(OUTPUT_DIR, "chunks_meta.parquet"),
         index=False,
