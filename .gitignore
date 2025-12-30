@@ -13,3 +13,5 @@ data/movie_catalog/movie_metadata.csv
 # Ignore raw datasets
 data/raw/
 data/inbetween
+data/embeddings/
+

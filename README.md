@@ -57,3 +57,9 @@ Vector DB: FAISS
 Generator: google/flan-t5-base
 Backend: FastAPI
 Frontend:  Next.js
+
+#Embeddings
+- Model: all-MiniLM-L6-v2
+- Batch embedding pipeline
+- Vectors persisted as NumPy arrays
+- Metadata stored separately for retrieval and citation
