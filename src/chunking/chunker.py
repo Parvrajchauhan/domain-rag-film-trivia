@@ -1,28 +1,35 @@
-
 import pandas as pd
+from typing import List, Dict
 from pathlib import Path
-from typing import Dict, List
+from datetime import datetime
 
-from .chunk_utils import recursive_split
-from .sentence_splitter import get_chunk_size, get_overlap_chars
+from .chunk_utils import (
+    recursive_split,
+    sentence_overlap,
+    clean_award_text,
+)
+from .sentence_splitter import (
+    get_chunk_size,
+    get_overlap_chars,
+)
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data" 
-OUT_PATH = DATA_DIR / "processed"/ "chunks.csv"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "inbetween"
+OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def apply_overlap(chunks: List[str], overlap_chars: int) -> List[str]:
-    if overlap_chars <= 0:
-        return chunks
+MIN_CHUNK_LEN = 200
 
-    overlapped = []
-    for i, chunk in enumerate(chunks):
-        if i == 0:
-            overlapped.append(chunk)
+def merge_short_chunks(chunks):
+    merged = []
+    for chunk in chunks:
+        if merged and len(chunk["text"]) < MIN_CHUNK_LEN:
+            prev = merged[-1]
+            prev["text"] += "\n\n" + chunk["text"]
+            prev["end_char"] = chunk["end_char"]
         else:
-            prev = overlapped[-1]
-            prefix = prev[-overlap_chars:]
-            overlapped.append(prefix + chunk)
-    return overlapped
+            merged.append(chunk)
+    return merged
 
 
 def chunk_document(row: pd.Series) -> List[Dict]:
@@ -30,55 +37,79 @@ def chunk_document(row: pd.Series) -> List[Dict]:
     section = row["section"]
     doc_id = row["doc_id"]
 
-    if not isinstance(text, str) or not text.strip():
-        return []
-
     max_chars = get_chunk_size(section)
-    overlap = get_overlap_chars(section, max_chars)
+    overlap_chars = get_overlap_chars(section, max_chars)
 
-    base_chunks = recursive_split(text, max_chars)
-    final_chunks = apply_overlap(base_chunks, overlap)
+    if section == "awards_finance":
+        text = clean_award_text(text)
 
-    results = []
-    cursor = 0 
+        items = [i.strip() for i in text.split("||") if i.strip()]
+        base_chunks = []
+        buf = ""
 
-    for idx, chunk_text in enumerate(final_chunks):
-        chunk_text = chunk_text.strip()
+        for item in items:
+            if len(buf) + len(item) <= max_chars:
+                buf += item + " || "
+            else:
+                base_chunks.append(buf.strip(" |"))
+                buf = item + " || "
 
-        if not chunk_text:
-            continue
+        if buf:
+            base_chunks.append(buf.strip(" |"))
+    else:
+        base_chunks = recursive_split(text, max_chars)
 
-        start_char = cursor
-        end_char = start_char + len(chunk_text)
+    chunks = []
+    cursor = 0
 
-        results.append({
+    for i, chunk in enumerate(base_chunks):
+        if i > 0:
+            overlap = sentence_overlap(chunks[-1]["text"], overlap_chars)
+            if overlap:
+                chunk = overlap + " " + chunk
+
+        if section == "awards_finance":
+            chunk = chunk.replace("||", "•")
+            
+            chunk = chunk.replace(" • ", "\n• ")
+            chunk = chunk.replace("• ", "\n• ")
+            
+            chunk = chunk.strip()
+
+        start = cursor
+        end = start + len(chunk)
+
+        chunks.append({
             "doc_id": doc_id,
-            "chunk_id": f"{doc_id}_{idx:03d}",
-            "text": chunk_text,
-            "start_char": start_char,
-            "end_char": end_char,
+            "chunk_id": f"{doc_id}_{i:03d}",
+            "text": chunk.strip(),
+            "start_char": int(start),
+            "end_char": int(end),
             "source": row["source"],
             "section": section,
             "title": row["title"],
-            "created_at": row["created_at"],
+            "created_at": datetime.utcnow().isoformat(),
         })
 
-        cursor = end_char 
+        cursor = end - overlap_chars if overlap_chars else end
+    chunks = merge_short_chunks(chunks)
 
-    return results
+    return chunks
 
 
 def main():
-    df = pd.read_csv(DATA_DIR / "inbetween/deduplicated_documents.csv")
+    df = pd.read_csv(DATA_DIR / "deduplicated_documents.csv")
 
     all_chunks = []
     for _, row in df.iterrows():
         all_chunks.extend(chunk_document(row))
 
     chunks_df = pd.DataFrame(all_chunks)
-    chunks_df.to_csv(OUT_PATH, index=False)
 
-    print(f"Saved chunks → {OUT_PATH}")
+    out_path = OUT_DIR / "chunks.csv"
+    chunks_df.to_csv(out_path, index=False)
+
+    print(f"Saved chunks → {out_path}")
     print(f"Total chunks: {len(chunks_df)}")
 
 
