@@ -7,7 +7,8 @@ CHUNKS_PATH = DATA_DIR / "retrieval_chunks.csv"
 
 def main():
     df = pd.read_csv(CHUNKS_PATH)
-
+    print(df["section"].value_counts())
+    print(df["section"].nunique())
     print(f"Total retrieval chunks: {len(df)}")
     print(f"Total parent documents: {df['doc_id'].nunique()}")
     print()

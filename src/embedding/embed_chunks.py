@@ -82,5 +82,5 @@ def embed_chunks(chunks_df: pd.DataFrame):
 
 
 if __name__ == "__main__":
-    chunks= pd.read_csv("data/processed/chunks.csv")
+    chunks= pd.read_csv("data/processed/retrieval_chunks.csv")
     embed_chunks(chunks)
