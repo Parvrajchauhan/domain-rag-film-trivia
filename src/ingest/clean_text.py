@@ -7,25 +7,18 @@ from bs4 import BeautifulSoup
 from unicodedata import normalize
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" 
-
-RAW_DIR =DATA_DIR / "raw"
-OUT_DIR = DATA_DIR  / "inbetween"
-
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+RAW_DIR = DATA_DIR / "raw"
+OUT_DIR = DATA_DIR / "inbetween"
 
 os.makedirs(OUT_DIR, exist_ok=True)
-
 
 def strip_html(text: str) -> str:
     if not isinstance(text, str):
         return ""
-
     text = html.unescape(text)
-
     soup = BeautifulSoup(text, "html.parser")
-    text = soup.get_text(separator=" ")
-
-    return text
+    return soup.get_text(separator=" ")
 
 
 def normalize_quotes(text: str) -> str:
@@ -42,8 +35,8 @@ def normalize_quotes(text: str) -> str:
 
 def strip_boilerplate(text: str) -> str:
     boilerplate_patterns = [
-        r"see more\s*$",
-        r"learn more\s*$",
+        r"\bsee more\b.*$",
+        r"\blearn more\b.*$",
         r"edit this page",
         r"contribute to this page",
         r"was this helpful\?",
@@ -59,9 +52,7 @@ def strip_boilerplate(text: str) -> str:
 
 def normalize_whitespace(text: str) -> str:
     text = normalize("NFKC", text)
-
     text = re.sub(r"\s+", " ", text)
-
     return text.strip()
 
 
@@ -76,8 +67,9 @@ def clean_text(text: str) -> str:
 def text_for_hashing(text: str) -> str:
     return clean_text(text).lower()
 
+
 def process_file(path: str):
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, encoding="utf-8")
 
     TEXT_COLUMNS = {
         "synopsis",
@@ -85,29 +77,30 @@ def process_file(path: str):
         "trivia",
         "goofs_continuity",
         "goofs_factual",
-        "plot",
+        "lead_section",
+        "plot_setup",
+        "plot_build_up",
+        "plot_ending",
         "production",
-        "reception"
+        "reception",
     }
 
     present_text_cols = [c for c in TEXT_COLUMNS if c in df.columns]
 
+    out_name = os.path.basename(path).replace(".csv", "_clean.csv")
+    out_path = os.path.join(OUT_DIR, out_name)
+
     if not present_text_cols:
-        out_name = os.path.basename(path).replace(".csv", "_clean.csv")
-        out_path = os.path.join(OUT_DIR, out_name)
         df.to_csv(out_path, index=False)
-        print(f"No text fields found, copied as-is → {out_path}")
+        print(f" No text fields found, copied as-is → {out_path}")
         return
 
     for col in present_text_cols:
         df[f"clean_{col}"] = df[col].apply(clean_text)
-        df[f"hash_{col}"] = df[col].apply(text_for_hashing)
-
-    out_name = os.path.basename(path).replace(".csv", "_clean.csv")
-    out_path = os.path.join(OUT_DIR, out_name)
+        df[f"hash_{col}"] = df[f"clean_{col}"].apply(lambda x: hash(x) if x else None)
 
     df.to_csv(out_path, index=False)
-    print(f"✅ Cleaned columns {present_text_cols} → {out_path}")
+    print(f" Cleaned columns {present_text_cols} → {out_path}")
 
 
 

@@ -14,7 +14,6 @@ df_top = (
       .reset_index(drop=True)
 )
 
-# Function to extract IMDb ID from link
 def extract_imdb_id(url):
     match = re.search(r"(tt\d+)", str(url))
     return match.group(1) if match else None

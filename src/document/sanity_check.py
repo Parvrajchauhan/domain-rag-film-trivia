@@ -3,7 +3,7 @@ from pathlib import Path
 
 DATA_DIR= Path(__file__).resolve().parent.parent.parent / "data" / "processed"
 
-CHUNKS_PATH = Path(DATA_DIR/"chunks.csv")
+CHUNKS_PATH = Path(DATA_DIR/"documents.csv")
 
 def main():
     df = pd.read_csv(CHUNKS_PATH)
@@ -12,8 +12,11 @@ def main():
     print(f"Total documents: {df['doc_id'].nunique()}")
     print()
 
-    df["chunk_len"] = df["text"].str.len()
+    nan_doc_count = df[df["text"].isna()]["doc_id"].nunique()
+    print(f"Documents with NaN text: {nan_doc_count}")
 
+
+    df["chunk_len"] = df["text"].str.len()
     avg_len = df["chunk_len"].mean()
     min_len = df["chunk_len"].min()
     max_len = df["chunk_len"].max()
@@ -23,11 +26,11 @@ def main():
     print(f"Max chunk length: {max_len} chars")
     print()
 
-    short_chunks = df[df["chunk_len"] < 200]
+    short_chunks = df[df["chunk_len"] < 150]
     print("=== SHORT CHUNKS CHECK ===")
-    print(f"Chunks < 200 chars: {len(short_chunks)}")
+    print(f"Chunks < 150 chars: {len(short_chunks)}")
     if len(short_chunks) > 0:
-        print(short_chunks[["doc_id", "chunk_id", "chunk_len"]].head())
+        print(short_chunks[["doc_id", "chunk_len", "text"]].head())
     print()
 
     overlap_issues = []
@@ -37,7 +40,7 @@ def main():
         for _, row in g.iterrows():
             if prev_end is not None:
                 if row["start_char"] < prev_end:
-                    overlap_issues.append((doc_id, row["chunk_id"]))
+                    overlap_issues.append((doc_id, row["doc_id"]))
             prev_end = row["end_char"]
 
     if overlap_issues:
@@ -49,7 +52,7 @@ def main():
     bad_offsets = df[df["end_char"] <= df["start_char"]]
     print(f"Chunks with invalid offsets: {len(bad_offsets)}")
     if len(bad_offsets) > 0:
-        print(bad_offsets[["doc_id", "chunk_id", "start_char", "end_char"]].head())
+        print(bad_offsets[["doc_id", "start_char", "end_char"]].head())
     print()
 
 
