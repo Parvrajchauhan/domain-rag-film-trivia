@@ -46,6 +46,9 @@ def build_awards_finance_text(row):
 
     return ". ".join(parts)
 
+
+WIKI_SECTION_MAP = ["lead_section", "plot_setup","plot_build_up","plot_ending","production","reception"]
+
 def collect_documents():
     rows = []
     exclude_movie_ids = load_excluded_movie_ids()
@@ -122,7 +125,7 @@ def collect_documents():
                         "text_len": len(text),
                     })
 
-            for section in ["plot", "production", "reception"]:
+            for section in WIKI_SECTION_MAP:
                 clean_col = f"clean_{section}"
                 if clean_col in df.columns and pd.notna(row.get(clean_col)):
                     text = row[clean_col]

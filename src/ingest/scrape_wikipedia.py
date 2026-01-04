@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import quote
 from pathlib import Path
 from typing import Optional
+import re
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" 
 
@@ -60,6 +61,39 @@ def fetch_html(url: str) -> str | None:
     except Exception:
         return None
 
+def extract_lead_intro(soup) -> str | None:
+    h2 = soup.find("h2", {"id": "Plot"})
+    if not h2:
+        return None
+
+    heading_div = h2.find_parent("div")
+    if not heading_div:
+        return None
+    
+    parent_div = heading_div.find_parent("div")
+    if not parent_div:
+        return None
+
+    content = []
+    started = False
+
+    for el in parent_div.find_all(recursive=False):
+
+        if el.name == "div" and el.find("h2", recursive=False):
+            break
+
+        if el.name == "p":
+            text = el.get_text(" ", strip=True)
+            if len(text) > 50:
+                content.append(text)
+                started = True
+
+        elif not started:
+            continue
+
+    return "\n".join(content) if content else None
+
+
 def extract_section(soup, section_id: str) -> str | None:
     h2 = soup.find("h2", {"id": section_id})
     if not h2:
@@ -81,6 +115,44 @@ def extract_section(soup, section_id: str) -> str | None:
                 content.append(text)
 
     return "\n".join(content) if content else None
+
+def split_plot_simple(plot_text: str):
+    if not plot_text or not plot_text.strip():
+        return None, None, None
+
+    # --- Paragraph split first ---
+    paragraphs = [
+        p.strip()
+        for p in plot_text.split("\n")
+        if len(p.strip()) > 50
+    ]
+
+    if len(paragraphs) < 3:
+        sentences = re.split(r'(?<=[.!?])\s+', plot_text.strip())
+
+        if len(sentences) < 3:
+            return plot_text.strip(), None, None
+
+        total = len(sentences)
+        setup_end = max(1, int(0.20 * total))
+        ending_start = max(setup_end + 1, int(0.75 * total))
+
+        plot_setup = " ".join(sentences[:setup_end])
+        plot_build_up = " ".join(sentences[setup_end:ending_start])
+        plot_ending = " ".join(sentences[ending_start:])
+
+        return plot_setup, plot_build_up, plot_ending
+
+    total = len(paragraphs)
+
+    setup_end = max(1, int(0.20 * total))
+    ending_start = max(setup_end + 1, int(0.75 * total))
+
+    plot_setup = "\n".join(paragraphs[:setup_end])
+    plot_build_up = "\n".join(paragraphs[setup_end:ending_start])
+    plot_ending = "\n".join(paragraphs[ending_start:])
+
+    return plot_setup, plot_build_up, plot_ending
 
 
 
@@ -136,11 +208,18 @@ def main():
         plot = extract_section(soup, "Plot")
         production = extract_section(soup, "Production")
         reception = extract_section(soup, "Reception")
+        plot_setup, plot_build_up, plot_ending = split_plot_simple(plot)
+        intro = extract_lead_intro(soup)
+        intro = extract_lead_intro(soup)
+
 
         rows.append({
             "movie_id": movie_id,
             "wiki_url": wiki_url,
-            "plot": plot,
+            "lead_section":intro,
+            "plot_setup": plot_setup,
+            "plot_build_up": plot_build_up,
+            "plot_ending": plot_ending,
             "production": production,
             "reception": reception
         })

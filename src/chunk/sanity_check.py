@@ -1,16 +1,19 @@
 import pandas as pd
 from pathlib import Path
 
-DATA_DIR= Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+CHUNKS_PATH = DATA_DIR / "retrieval_chunks.csv"
 
-CHUNKS_PATH = Path(DATA_DIR/"chunks.csv")
 
 def main():
     df = pd.read_csv(CHUNKS_PATH)
-
-    print(f"Total chunks: {len(df)}")
-    print(f"Total documents: {df['doc_id'].nunique()}")
+    print(df["section"].value_counts())
+    print(df["section"].nunique())
+    print(f"Total retrieval chunks: {len(df)}")
+    print(f"Total parent documents: {df['doc_id'].nunique()}")
     print()
+    nan_doc_count = df[df["text"].isna()]["chunk_id"].nunique()
+    print(f"Documents with NaN text: {nan_doc_count}")
 
     df["chunk_len"] = df["text"].str.len()
 
@@ -23,11 +26,11 @@ def main():
     print(f"Max chunk length: {max_len} chars")
     print()
 
-    short_chunks = df[df["chunk_len"] < 200]
+    short_chunks = df[df["chunk_len"] < 150]
     print("=== SHORT CHUNKS CHECK ===")
-    print(f"Chunks < 200 chars: {len(short_chunks)}")
+    print(f"Chunks < 150 chars: {len(short_chunks)}")
     if len(short_chunks) > 0:
-        print(short_chunks[["doc_id", "chunk_id", "chunk_len"]].head())
+        print(short_chunks[["chunk_id", "doc_id", "chunk_len"]].head())
     print()
 
     overlap_issues = []
@@ -41,7 +44,8 @@ def main():
             prev_end = row["end_char"]
 
     if overlap_issues:
-        print(f"Overlap detected in {len(overlap_issues)} chunks ")
+        print(f"Overlap detected in {len(overlap_issues)} retrieval chunks")
+        print(overlap_issues[:5])
     else:
         print("No overlap detected")
     print()
@@ -49,7 +53,7 @@ def main():
     bad_offsets = df[df["end_char"] <= df["start_char"]]
     print(f"Chunks with invalid offsets: {len(bad_offsets)}")
     if len(bad_offsets) > 0:
-        print(bad_offsets[["doc_id", "chunk_id", "start_char", "end_char"]].head())
+        print(bad_offsets[["chunk_id", "start_char", "end_char"]].head())
     print()
 
 

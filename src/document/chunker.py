@@ -17,8 +17,8 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "inbetween"
 OUT_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
-MIN_CHUNK_LEN = 200
+MIN_CHUNK_LEN = 120
+MAX_DOC_CHUNK_LEN = 800 
 
 def merge_short_chunks(chunks):
     merged = []
@@ -31,11 +31,13 @@ def merge_short_chunks(chunks):
             merged.append(chunk)
     return merged
 
-
 def chunk_document(row: pd.Series) -> List[Dict]:
     text = row["text"]
     section = row["section"]
-    doc_id = row["doc_id"]
+    parent_doc_id = row["doc_id"]
+
+    if len(text) > MAX_DOC_CHUNK_LEN:
+        text = text[:MAX_DOC_CHUNK_LEN]
 
     max_chars = get_chunk_size(section)
     overlap_chars = get_overlap_chars(section, max_chars)
@@ -60,29 +62,32 @@ def chunk_document(row: pd.Series) -> List[Dict]:
         base_chunks = recursive_split(text, max_chars)
 
     chunks = []
-    cursor = 0
+    cursor = int(row["start_char"]) if "start_char" in row else 0
 
     for i, chunk in enumerate(base_chunks):
-        if i > 0:
+        if i > 0 and chunks:
             overlap = sentence_overlap(chunks[-1]["text"], overlap_chars)
             if overlap:
                 chunk = overlap + " " + chunk
 
         if section == "awards_finance":
-            chunk = chunk.replace("||", "•")
-            
-            chunk = chunk.replace(" • ", "\n• ")
-            chunk = chunk.replace("• ", "\n• ")
-            
-            chunk = chunk.strip()
+            chunk = (
+                chunk.replace("||", "•")
+                     .replace(" • ", "\n• ")
+                     .replace("• ", "\n• ")
+                     .strip()
+            )
+
+        chunk = chunk.strip()
+        if len(chunk) < MIN_CHUNK_LEN:
+            continue 
 
         start = cursor
         end = start + len(chunk)
 
         chunks.append({
-            "doc_id": doc_id,
-            "chunk_id": f"{doc_id}_{i:03d}",
-            "text": chunk.strip(),
+            "doc_id": f"{parent_doc_id}_C{i+1:03d}",
+            "text": chunk,
             "start_char": int(start),
             "end_char": int(end),
             "source": row["source"],
@@ -92,6 +97,7 @@ def chunk_document(row: pd.Series) -> List[Dict]:
         })
 
         cursor = end - overlap_chars if overlap_chars else end
+
     chunks = merge_short_chunks(chunks)
 
     return chunks
@@ -106,7 +112,7 @@ def main():
 
     chunks_df = pd.DataFrame(all_chunks)
 
-    out_path = OUT_DIR / "chunks.csv"
+    out_path = OUT_DIR / "documents.csv"
     chunks_df.to_csv(out_path, index=False)
 
     print(f"Saved chunks → {out_path}")
