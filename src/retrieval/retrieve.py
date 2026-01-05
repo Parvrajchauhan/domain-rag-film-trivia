@@ -1,36 +1,18 @@
-import faiss
-import numpy as np
 from typing import List, Dict
-from src.embeddings.embedder import embed_text
-from src.db.metadata import fetch_metadata_by_ids
+
+from ..index.index_utils import query_text, query_index
 
 
-def retrieve(
+
+def retrieve_by_text(
     query: str,
-    index: faiss.Index,
-    k: int = 10
+    k: int = 5
 ) -> List[Dict]:
-    """
-    Step 1: Vector retrieval
-    """
-    query_embedding = embed_text(query)
-    query_embedding = np.array([query_embedding]).astype("float32")
+    return query_text(query, k=k)
 
-    scores, ids = index.search(query_embedding, k)
 
-    chunks = []
-    for score, idx in zip(scores[0], ids[0]):
-        if idx == -1:
-            continue
-
-        metadata = fetch_metadata_by_ids(idx)
-
-        chunks.append({
-            "chunk_id": idx,
-            "score": float(score),
-            "text": metadata["text"],
-            "title": metadata.get("title"),
-            "source": metadata.get("source")
-        })
-
-    return chunks
+def retrieve_by_embedding(
+    query_embedding,
+    k: int = 5
+) -> List[Dict]:
+    return query_index(query_embedding, k=k)
