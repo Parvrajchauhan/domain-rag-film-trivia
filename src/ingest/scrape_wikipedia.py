@@ -215,6 +215,7 @@ def main():
 
         rows.append({
             "movie_id": movie_id,
+            "title": title,
             "wiki_url": wiki_url,
             "lead_section":intro,
             "plot_setup": plot_setup,

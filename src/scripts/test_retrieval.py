@@ -5,7 +5,7 @@ TEST_QUERIES = [
     "Who directed Inception?",
     "What happens at the end of Shawshank Redemption?",
     "Which movie features Pandora?",
-    "what the plot of WALL-E"
+    "which plot of Life of Pi "
 ]
 
 
