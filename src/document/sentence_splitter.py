@@ -1,22 +1,23 @@
 SECTION_CHUNK_SIZES = {
-    # Wiki
-    "lead_section": 600,
-    "plot_setup": 450,
-    "plot_build_up": 500,
-    "plot_ending": 400,
-    "production": 600,
-    "reception": 600,
+    # Wiki (answer-critical)
+    "lead_section": 500,        
+    "plot_setup": 400,          
+    "plot_build_up": 450,       
+    "plot_ending": 300,         
+    "production": 500,          
+    "reception": 500,           
 
-    # IMDb
-    "synopsis": 500,
-    "summaries": 500,
-    "trivia": 400,
-    "goofs_continuity": 350,
-    "goofs_factual": 350,
+    # IMDb (fact-heavy)
+    "synopsis": 450,            
+    "summaries": 450,           
+    "trivia": 300,              
+    "goofs_continuity": 300,    
+    "goofs_factual": 300,       
 
     # Combined
-    "awards_finance": 700,
+    "awards_finance": 600,      
 }
+
 
 SECTION_CHUNK_OVERLAP = {
     "lead_section": 0.10,

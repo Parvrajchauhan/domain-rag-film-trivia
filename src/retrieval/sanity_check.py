@@ -101,7 +101,7 @@ def sanity_check_no_nan_scores(query: str):
 
 
 def main():
-    query = "What event leads Red to reunite with Andy outside Shawshank?"
+    query = "Which movie features Pandora?"
     sanity_check_rerank(query)
     print("\n ALL SANITY CHECKS PASSED")
 
