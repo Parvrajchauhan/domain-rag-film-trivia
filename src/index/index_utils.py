@@ -1,8 +1,6 @@
 import numpy as np
 import faiss
-import torch
 from typing import List, Dict
-from ..llm.client import get_llm
 from .load_index import load_faiss_index
 from .metadata_store import MetadataStore
 from ..document.db_save import MetadataStore2
@@ -40,153 +38,91 @@ def _get_embedding_model():
 
 from typing import List, Dict
 
-def generate_answer(
-    prompt: str,
-    max_length: int = 128,
-    temperature: float = 0.7,
-    top_p: float = 0.9
-) -> str:
-
-    tokenizer, model = get_llm()
-
-    inputs = tokenizer(
-        prompt,
-        return_tensors="pt",
-        truncation=True
-    ).to(model.device)
-
-    with torch.no_grad():
-        do_sample = temperature > 0.0
-
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=max_length,
-            temperature=temperature if do_sample else None,
-            top_p=top_p if do_sample else None,
-            do_sample=do_sample,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-
-    generated = tokenizer.decode(
-        output_ids[0],
-        skip_special_tokens=True
-    )
-
-    if generated.startswith(prompt):
-        generated = generated[len(prompt):]
-
-    return generated.strip()
 
 
 
-def classify_query_intent_llm(query: str) -> str:
+def classify_query_intent(query: str) -> str:
+    q = query.lower().strip()
 
-    prompt = f"""
-You are helping a movie question-answering system.
+    # ENDING
+    if any(word in q for word in ["ending", "end", "final", "conclusion", "last scene"]):
+        return "ending"
 
-Given the following question, do TWO things:
-1. Identify the PRIMARY movie being asked about (if any).
-2. Classify the intent of the question.
+    # DIRECTOR
+    if any(word in q for word in ["who directed", "director", "directed by", "filmmaker"]):
+        return "director"
 
-Question:
-"{query}"
+    # EXPLANATION (HOW / WHY)
+    if q.startswith(("how", "why", "explain")):
+        return "explanation"
 
-Choose EXACTLY ONE intent label from:
-- plot
-- ending
-- director
-- character
-- fact
-- explanation
-- general
+    # FACT (short factual questions)
+    if q.startswith(("who", "when", "where", "which")):
+        return "fact"
+    
+    # CHARACTER
+    if any(word in q for word in [
+        "character", "protagonist", "antagonist",
+        "he", "she", "they", "him", "her"
+    ]) and any(word in q for word in ["does", "did", "become", "kill", "betray"]):
+        return "character"
 
-Rules:
-- If a movie is clearly mentioned, return its exact title.
-- If no specific movie is mentioned, return "unknown".
-- Respond in the following STRICT format (no extra text):
+    # FACT (metadata-style)
+    if any(word in q for word in [
+        "release", "year", "runtime", "rating",
+        "box office", "budget", "award"
+    ]):
+        return "fact"
 
-movie: <movie title or unknown>
-intent: <one label>
-"""
+    # PLOT
+    if any(word in q for word in [
+        "plot", "story", "what happens", "summary"
+    ]):
+        return "plot"
 
-    try:
-        response = generate_answer(
-            prompt,
-            max_length=20,
-            temperature=0.0
-        )
-        return response.strip()
-    except Exception:
-        return "movie: unknown\nintent: general"
-
-def parse_intent_response(response: str) -> tuple[str, str]:
-    movie = "unknown"
-    intent = "general"
-
-    for line in response.lower().splitlines():
-        if line.startswith("movie:"):
-            movie = line.replace("movie:", "").strip()
-        elif line.startswith("intent:"):
-            intent = line.replace("intent:", "").strip()
-
-    valid_intents = {
-        "plot", "ending", "director",
-        "character", "fact", "explanation", "general"
-    }
-
-    if intent not in valid_intents:
-        intent = "general"
-
-    return movie, intent
+    # GENERAL fallback
+    return "general"
 
 
 def rewrite_query_by_intent(
     query: str,
     query_type: str,
-    movie: str | None = None
 ) -> str:
 
     q = query.strip()
     q_lower = q.lower()
 
-    movie = movie.strip().lower() if movie and movie != "unknown" else None
-
-    def anchor(text: str) -> str:
-        if movie and movie not in text.lower():
-            return f"{movie} {text}"
-        return text
-
     if query_type == "plot":
         if not any(w in q_lower for w in ["plot", "story", "narrative"]):
-            return anchor(f"{q} plot story narrative summary")
-        return anchor(q)
+            return f"{q} plot story narrative summary"
+        return q
 
     if query_type == "ending":
         if not any(w in q_lower for w in ["ending", "end", "final"]):
-            return anchor(f"{q} ending final scene conclusion")
-        return anchor(q)
+            return f"{q} ending final scene conclusion"
+        return q
 
     if query_type == "director":
         if not any(w in q_lower for w in ["director", "directed"]):
-            return anchor(f"{q} directed by filmmaker director")
-        return anchor(q)
+            return f"{q} directed by filmmaker director"
+        return q
 
     if query_type == "character":
         if not any(w in q_lower for w in ["character", "protagonist"]):
-            return anchor(f"{q} character actions role arc")
-        return anchor(q)
+            return f"{q} character actions role arc"
+        return q
 
     if query_type == "fact":
-        return anchor(f"{q} movie facts details information")
+        return f"{q} movie facts details information"
 
     if query_type == "explanation":
-        return anchor(f"{q} explanation reason process motivation")
-    
-    if query_type == "general":
-        return anchor(q)
+        return f"{q} explanation reason process motivation"
 
-    return anchor(q)
+    if query_type == "general":
+        return q
+
+    return q
+
 
 
 def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
@@ -252,12 +188,9 @@ def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
 
 def query_text(query: str, k: int = 5) -> List[Dict]:
     
-    movie, query_type = parse_intent_response(
-    classify_query_intent_llm(query)
-)
+    query_type = classify_query_intent(query)
 
-
-    rewritten_query = rewrite_query_by_intent(query, query_type,movie)
+    rewritten_query = rewrite_query_by_intent(query, query_type)
 
     model = _get_embedding_model()
     query_embedding = model.encode(
@@ -269,9 +202,10 @@ def query_text(query: str, k: int = 5) -> List[Dict]:
     results = query_index(query_embedding, k=k)
 
     for r in results:
-        r["movie"]=movie,
         r["query_type"] = query_type
         r["original_query"] = query
         r["rewritten_query"] = rewritten_query
 
     return results
+
+
