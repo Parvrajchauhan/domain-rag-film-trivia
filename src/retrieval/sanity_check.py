@@ -43,7 +43,7 @@ def sanity_check_rerank(query: str):
             print(f"Title : {r['title']}")
             print(f"Chunk : {r['chunk_id']}")
             print(f"Source: {r['source']}")
-            print(f"Text  : {r['text'][:200]}...")
+            print(f"Text  : {r['text']}...")
     top1 = reranked[0]
     assert top1["score"] > 0.3, "Top-1 similarity too low"
     assert all(r["score"] > 0.2 for r in reranked), "Low-similarity noise detected"
@@ -101,7 +101,7 @@ def sanity_check_no_nan_scores(query: str):
 
 
 def main():
-    query = "Which movie features Pandora?"
+    query = "What happens at the end of Shawshank Redemption?"
     sanity_check_rerank(query)
     print("\n ALL SANITY CHECKS PASSED")
 

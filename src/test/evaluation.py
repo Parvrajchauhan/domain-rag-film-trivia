@@ -139,6 +139,11 @@ def run():
 
         p_at_5 = precision_at_k(query, retrieved_chunks, judge)
         r_at_5 = recall_at_k(retrieved_chunks, relevant, k=5)
+        if r_at_5 == 0 and exact_match:
+            label = "unsupported_correct" 
+        else:
+            label=  "Correct" 
+
         halluc = hallucination_score(answer, retrieved_chunks, judge)
         em = exact_match(answer, ground_truth, judge)
 
@@ -149,6 +154,7 @@ def run():
         print(f"query_type: {query_type}")
         print(f"Precision@5: {p_at_5:.2f}")
         print(f"Recall@5: {r_at_5:.2f}")
+        print(f"label:{label}")
         print(f"Hallucination Score: {halluc['score']:.2f}")
         print(f"Is Hallucinated: {halluc['is_hallucinated']}")
         print(f"Exact Match: {em}")
