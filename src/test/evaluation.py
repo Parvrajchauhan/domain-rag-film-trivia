@@ -3,6 +3,8 @@ from .hallucination_check import hallucination_score
 from .exact_match import exact_match, load_judge_model
 from ..llm.generate import generate_answer
 
+import mlflow
+from collections import Counter
 
 EVAL_SET = [
     {
@@ -126,38 +128,105 @@ EVAL_SET = [
 def run():
     judge = load_judge_model()
 
-    for ex in EVAL_SET:
-        query = ex["query"]
-        relevant = ex["relevant_chunks"]
-        ground_truth = ex["ground_truth"]
+    mlflow.set_experiment("film_rag_evaluation")
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
 
-        result = generate_answer(query)
-        answer = result["answer"]
-        retrieved_chunks = result["context"] 
-        movie=result["movie"]
-        query_type=result["query_type"]
+    p_at_5_list = []
+    r_at_5_list = []
+    em_list = []
+    halluc_list = []
+    labels = []
 
-        p_at_5 = precision_at_k(query, retrieved_chunks, judge)
-        r_at_5 = recall_at_k(retrieved_chunks, relevant, k=5)
-        if r_at_5 == 0 and exact_match:
-            label = "unsupported_correct" 
-        else:
-            label=  "Correct" 
+    with mlflow.start_run(run_name="rag_eval_v1"):
 
-        halluc = hallucination_score(answer, retrieved_chunks, judge)
-        em = exact_match(answer, ground_truth, judge)
+        mlflow.log_param("retriever", "faiss + embedding")
+        mlflow.log_param("reranker", "intent-aware rerank")
+        mlflow.log_param("hallucination_judge", "cross-encoder")
+        mlflow.log_param("intent_classifier", "heuristic")
 
-        print("=" * 60)
-        print(f"Query: {query}")
-        print(f"Answer: {answer}")
-        print(f"movie: {movie}")
-        print(f"query_type: {query_type}")
-        print(f"Precision@5: {p_at_5:.2f}")
-        print(f"Recall@5: {r_at_5:.2f}")
-        print(f"label:{label}")
-        print(f"Hallucination Score: {halluc['score']:.2f}")
-        print(f"Is Hallucinated: {halluc['is_hallucinated']}")
-        print(f"Exact Match: {em}")
+        for ex in EVAL_SET:
+            query = ex["query"]
+            relevant = ex["relevant_chunks"]
+            ground_truth = ex["ground_truth"]
+
+            result = generate_answer(query)
+            answer = result["answer"]
+            retrieved_chunks = result["context"]
+
+            movie = result.get("movie", "unknown")
+            query_type = result.get("query_type", "general")
+
+            p_at_5 = precision_at_k(query, retrieved_chunks, judge)
+            r_at_5 = recall_at_k(retrieved_chunks, relevant, k=5)
+            em = exact_match(answer, ground_truth, judge)
+
+            query_type = (
+                retrieved_chunks[0].get("query_type", "general")
+                if retrieved_chunks else "general"
+            )
+
+            if answer.strip() == "I don't know based on the given context.":
+                label = "abstained"
+
+            elif query_type in {"ending", "explanation"} and r_at_5 > 0:
+                label = "grounded_correct"
+
+            elif em and r_at_5 == 0:
+                label = "leaked_correct"
+
+            elif em and r_at_5 > 0:
+                label = "grounded_correct"
+
+            elif not em and r_at_5 > 0:
+                label = "retrieved_but_wrong"
+
+            else:
+                label = "wrong_and_unsupported"
+
+            halluc = hallucination_score(
+                answer,
+                retrieved_chunks,
+                judge,
+                label
+            )
+
+            mlflow.log_metric("precision_at_5", p_at_5)
+            mlflow.log_metric("recall_at_5", r_at_5)
+            mlflow.log_metric("exact_match", em["score"])
+            mlflow.log_metric("exact_match", int(em["exact_match"]))
+            mlflow.log_metric("hallucination_score", halluc["score"])
+            mlflow.log_metric("is_hallucinated", int(halluc["is_hallucinated"]))
+
+            mlflow.set_tag("query_intent", query_type)
+            mlflow.set_tag("label", label)
+            mlflow.set_tag("movie", movie)
+
+            p_at_5_list.append(p_at_5)
+            r_at_5_list.append(r_at_5)
+            em_list.append(int(em["exact_match"]))
+            halluc_list.append(int(halluc["is_hallucinated"]))
+            labels.append(label)
+            
+            print("\n")
+            print(f"Query: {query}")
+            print(f"Answer: {answer}")
+            print(f"movie: {movie}")
+            print(f"query_type: {query_type}")
+            print(f"Precision@5: {p_at_5:.2f}")
+            print(f"Recall@5: {r_at_5:.2f}")
+            print(f"label: {label}")
+            print(f"Hallucination Score: {halluc['score']:.2f}")
+            print(f"Is Hallucinated: {halluc['is_hallucinated']}")
+            print(f"Exact Match: {em}")
+
+        mlflow.log_metric("mean_precision_at_5", sum(p_at_5_list) / len(p_at_5_list))
+        mlflow.log_metric("mean_recall_at_5", sum(r_at_5_list) / len(r_at_5_list))
+        mlflow.log_metric("exact_match_rate", sum(em_list) / len(em_list))
+        mlflow.log_metric("hallucination_rate", sum(halluc_list) / len(halluc_list))
+
+        label_counts = Counter(labels)
+        for k, v in label_counts.items():
+            mlflow.log_metric(f"label_count_{k}", v)
 
 
 if __name__ == "__main__":

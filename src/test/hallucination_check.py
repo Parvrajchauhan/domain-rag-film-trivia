@@ -2,9 +2,9 @@ def hallucination_score(
     answer: str,
     context_chunks: list[dict],
     model,
+    label: str,
     threshold: float = 0.55
 ) -> dict:
-  
     if not answer:
         return {
             "score": 0.0,
@@ -12,6 +12,16 @@ def hallucination_score(
         }
 
     if answer.strip() == "I don't know based on the given context.":
+        return {
+            "score": 1.0,
+            "is_hallucinated": False
+        }
+
+    if label in {
+        "grounded_correct",
+        "leaked_correct",
+        "retrieved_but_wrong"
+    }:
         return {
             "score": 1.0,
             "is_hallucinated": False
@@ -25,14 +35,7 @@ def hallucination_score(
 
     query_type = context_chunks[0].get("query_type", "general")
 
-    if query_type in {"fact", "director"}:
-        return {
-            "score": 1.0,
-            "is_hallucinated": False
-        }
-
-    context_text = " ".join(c["text"] for c in context_chunks)
-    context_text = context_text[:4000]
+    context_text = " ".join(c["text"] for c in context_chunks)[:4000]
 
     raw_score = float(
         model.predict([(answer, context_text)])[0]
@@ -43,7 +46,7 @@ def hallucination_score(
     effective_threshold = threshold
 
     if query_type in {"ending", "explanation"}:
-        effective_threshold *= 0.6 
+        effective_threshold *= 0.6
 
     if query_type == "general":
         effective_threshold *= 0.9
