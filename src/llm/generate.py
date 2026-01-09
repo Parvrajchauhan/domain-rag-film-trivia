@@ -61,7 +61,7 @@ def generate_answer(
 
     retrieved = retrieve_by_text(query, k=15)
 
-    reranked = rerank(query, retrieved, top_k=15)
+    reranked = rerank(query, retrieved, top_k=9)
 
     if not reranked:
         return {
