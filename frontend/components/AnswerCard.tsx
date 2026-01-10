@@ -1,19 +1,26 @@
-import { QueryResponse, SourceDoc } from "@/types";
-
-interface AnswerCardProps {
-  data: QueryResponse | null;
-  loading: boolean;
-  error?: string;
-}
+import {
+  Sparkles,
+  Clock,
+  TrendingUp,
+  Shield,
+  ExternalLink,
+  BookOpen,
+  ChevronRight,
+  CheckCircle2,
+} from "lucide-react";
 
 export default function AnswerCard({
   data,
   loading,
   error,
-}: AnswerCardProps) {
+}: {
+  data: any;
+  loading: boolean;
+  error: string | null;
+}) {
   if (loading) {
     return (
-      <div className="border rounded p-4 animate-pulse">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 text-center text-white">
         Generating answer...
       </div>
     );
@@ -21,7 +28,7 @@ export default function AnswerCard({
 
   if (error) {
     return (
-      <div className="border rounded p-4 text-red-600">
+      <div className="bg-red-900/20 border border-red-500 rounded-2xl p-6 text-red-400">
         {error}
       </div>
     );
@@ -30,40 +37,45 @@ export default function AnswerCard({
   if (!data) return null;
 
   return (
-    <div className="border rounded p-4 space-y-4">
-      {/* Answer */}
-      <div>
-        <h2 className="font-semibold text-lg mb-1">Answer</h2>
-        <p className="text-gray-800">{data.answer}</p>
+    <div className="space-y-4">
+      <div className="flex items-start space-x-3">
+        <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+        <div className="bg-violet-600 rounded-2xl p-4 text-white">
+          {data.answer}
+        </div>
       </div>
 
-      {/* Metrics */}
-      <div className="flex gap-4 text-sm text-gray-600">
-        <span>Confidence: {data.confidence.toFixed(2)}</span>
-        <span>Hallucination: {data.hallucination_score.toFixed(2)}</span>
-        <span>Latency: {data.latency_ms} ms</span>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-3 bg-gray-800 rounded-xl">
+          <TrendingUp className="text-lime-400" />
+          {(data.confidence * 100).toFixed(0)}%
+        </div>
+        <div className="p-3 bg-gray-800 rounded-xl">
+          <Shield className="text-violet-400" />
+          {((1 - data.hallucination_score) * 100).toFixed(0)}%
+        </div>
+        <div className="p-3 bg-gray-800 rounded-xl">
+          <Clock className="text-purple-400" />
+          {data.latency_ms}ms
+        </div>
       </div>
 
-      {/* Sources */}
-      <div>
-        <h3 className="font-semibold mb-2">Sources</h3>
-        <ul className="space-y-2">
-          {data.sources.map((src: SourceDoc) => (
-            <li
-              key={src.id}
-              className="border rounded p-2 text-sm"
-            >
-              <div className="font-medium">{src.title}</div>
-              <div className="text-gray-600">
-                {src.source} · {src.section}
-              </div>
-              <p className="mt-1">{src.snippet}</p>
-              <div className="text-xs text-gray-500 mt-1">
-                Score: {src.score.toFixed(2)}
-              </div>
-            </li>
+      <div className="bg-gray-900 rounded-2xl border border-gray-700">
+        <div className="p-4 border-b border-gray-700 flex items-center space-x-2">
+          <BookOpen className="text-lime-400" />
+          <span className="text-white">Sources</span>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {data.sources.map((src: any, i: number) => (
+            <div key={src.id} className="bg-gray-800 rounded-xl p-4">
+              <h4 className="text-white">{src.title}</h4>
+              <p className="text-gray-400 text-xs">{src.snippet}</p>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );
