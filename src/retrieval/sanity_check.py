@@ -28,7 +28,8 @@ def sanity_check_rerank(query: str):
     print("SANITY CHECK: RERANKING")
 
     retrieved = retrieve_by_text(query, k=20)
-    reranked = rerank(query, retrieved, top_k=10)
+    q_type=retrieved[0].get("query_type", "general")
+    reranked = rerank(query, retrieved, query_type=q_type, top_k=10)
 
     assert reranked, " No results after reranking"
 
@@ -53,7 +54,8 @@ def sanity_check_score_fusion(query: str):
     print("SANITY CHECK: SCORE FUSION")
 
     retrieved = retrieve_by_text(query, k=30)
-    reranked = rerank(query, retrieved, top_k=20)
+    q_type=retrieved[0].get("query_type", "general")
+    reranked = rerank(query, retrieved, query_type=q_type, top_k=20)
     fused = fuse_scores(reranked, alpha=0.6)
 
     assert fused, " No results after score fusion"
@@ -90,7 +92,8 @@ def sanity_check_no_nan_scores(query: str):
     print("SANITY CHECK: NaN / ZERO VECTORS")
 
     retrieved = retrieve_by_text(query, k=10)
-    reranked = rerank(query, retrieved, top_k=10)
+    q_type=retrieved[0].get("query_type", "general")
+    reranked = rerank(query, retrieved, query_type=q_type, top_k=10)
     fused = fuse_scores(reranked)
 
     for r in fused:
@@ -101,7 +104,7 @@ def sanity_check_no_nan_scores(query: str):
 
 
 def main():
-    query = "What happens at the end of Shawshank Redemption?"
+    query = "all characters in Avatar movie?"
     sanity_check_rerank(query)
     print("\n ALL SANITY CHECKS PASSED")
 

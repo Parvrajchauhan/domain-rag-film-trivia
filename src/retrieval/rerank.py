@@ -11,9 +11,9 @@ QUERY_TYPE_WEIGHTS = {
     "plot": 1.15,
     "character": 1.15,
     "explanation": 1.1,
+    "summary": 1.15,
     "general": 1.0,
 }
-
 
 
 _embedding_model = None
@@ -28,9 +28,12 @@ def _get_embedding_model():
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b))
+
+
 def rerank(
     query: str,
     retrieved_chunks: List[Dict],
+    query_type: str,                    
     top_k: int = 5,
     min_score: float = 0.15,
 ) -> List[Dict]:
@@ -49,7 +52,6 @@ def rerank(
     )
     query_emb = np.asarray(query_emb, dtype="float32")
 
-
     texts = [c["text"] for c in retrieved_chunks]
 
     chunk_embs = model.encode(
@@ -59,15 +61,14 @@ def rerank(
     )
     chunk_embs = np.asarray(chunk_embs, dtype="float32")
 
+    intent_weight = QUERY_TYPE_WEIGHTS.get(query_type, 1.0)
+
     reranked = []
 
     for chunk, emb in zip(retrieved_chunks, chunk_embs):
         sim = cosine_similarity(query_emb, emb)
 
-        query_type = chunk.get("query_type", "general")
-        importance = QUERY_TYPE_WEIGHTS.get(query_type, 1.0)
-
-        final_score = sim * importance
+        final_score = sim * intent_weight
 
         if final_score < min_score:
             continue
@@ -76,7 +77,8 @@ def rerank(
             **chunk,
             "rerank_score": float(final_score),
             "base_similarity": float(sim),
-            "importance": float(importance),
+            "query_type": query_type,
+            "importance": float(intent_weight),
         })
 
     reranked.sort(key=lambda x: x["rerank_score"], reverse=True)

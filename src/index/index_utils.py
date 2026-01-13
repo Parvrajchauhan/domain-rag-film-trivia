@@ -11,6 +11,64 @@ _metadata_store = None
 _embedding_model = None
 _metadata_store2 =None
 
+
+INTENT_SECTION_FILTERS = {
+
+    # Short factual / entity lookups
+    "director": {
+        "lead_section",
+        "production",
+        "synopsis"
+    },
+
+    "fact": {
+        "lead_section",
+        "synopsis",
+        "reception",
+        "awards_finance"
+    },
+
+    # High-level overview (NOT full plot)
+    "summary": {
+        "lead_section",
+        "synopsis",
+        "summaries"
+    },
+
+    # Detailed story progression
+    "plot": {
+        "plot_setup",
+        "plot_build_up",
+        "synopsis",
+        "summaries"
+    },
+
+    # Final resolution only
+    "ending": {
+        "plot_ending",
+        "summaries"
+    },
+
+    # Cause–effect, reasoning-heavy answers
+    "explanation": {
+        "plot_build_up",
+        "plot_ending",
+        "production"
+    },
+
+    # Character actions / arcs
+    "character": {
+        "plot_setup",
+        "plot_build_up",
+        "plot_ending",
+        "synopsis"
+    },
+
+    # Catch-all (no filtering)
+    "general": None
+}
+
+
 def _get_faiss_index():
     global _faiss_index
     if _faiss_index is None:
@@ -40,7 +98,6 @@ from typing import List, Dict
 
 
 
-
 def classify_query_intent(query: str) -> str:
     q = query.lower().strip()
 
@@ -52,6 +109,13 @@ def classify_query_intent(query: str) -> str:
     if any(word in q for word in ["who directed", "director", "directed by", "filmmaker"]):
         return "director"
 
+    # SUMMARY (HIGH-LEVEL, NON-DETAILED)
+    if any(word in q for word in [
+        "summary", "summarize", "overview",
+        "brief", "short summary", "in short"
+    ]):
+        return "summary"
+
     # EXPLANATION (HOW / WHY)
     if q.startswith(("how", "why", "explain")):
         return "explanation"
@@ -59,12 +123,14 @@ def classify_query_intent(query: str) -> str:
     # FACT (short factual questions)
     if q.startswith(("who", "when", "where", "which")):
         return "fact"
-    
-    # CHARACTER
+
+    # CHARACTER ACTIONS
     if any(word in q for word in [
         "character", "protagonist", "antagonist",
         "he", "she", "they", "him", "her"
-    ]) and any(word in q for word in ["does", "did", "become", "kill", "betray"]):
+    ]) and any(word in q for word in [
+        "does", "did", "become", "kill", "betray"
+    ]):
         return "character"
 
     # FACT (metadata-style)
@@ -74,9 +140,9 @@ def classify_query_intent(query: str) -> str:
     ]):
         return "fact"
 
-    # PLOT
+    # PLOT (DETAILED EVENTS)
     if any(word in q for word in [
-        "plot", "story", "what happens", "summary"
+        "plot", "story", "what happens"
     ]):
         return "plot"
 
@@ -92,40 +158,63 @@ def rewrite_query_by_intent(
     q = query.strip()
     q_lower = q.lower()
 
+    # PLOT (detailed events)
     if query_type == "plot":
         if not any(w in q_lower for w in ["plot", "story", "narrative"]):
-            return f"{q} plot story narrative summary"
+            return f"{q} plot story narrative events"
         return q
 
+    # ENDING (final resolution)
     if query_type == "ending":
         if not any(w in q_lower for w in ["ending", "end", "final"]):
             return f"{q} ending final scene conclusion"
         return q
 
+    # DIRECTOR (entity lookup)
     if query_type == "director":
         if not any(w in q_lower for w in ["director", "directed"]):
             return f"{q} directed by filmmaker director"
         return q
 
+    # CHARACTER (actions / arc)
     if query_type == "character":
         if not any(w in q_lower for w in ["character", "protagonist"]):
             return f"{q} character actions role arc"
         return q
 
+    # SUMMARY (high-level overview, NOT plot)
+    if query_type == "summary":
+        if not any(w in q_lower for w in ["summary", "overview", "brief"]):
+            return f"{q} summary overview brief"
+        return q
+
+    # FACT (metadata / short facts)
     if query_type == "fact":
         return f"{q} movie facts details information"
 
+    # EXPLANATION (how / why)
     if query_type == "explanation":
-        return f"{q} explanation reason process motivation"
+        return f"{q} explanation reason cause effect"
 
+    # GENERAL fallback
     if query_type == "general":
         return q
 
     return q
 
 
+def infer_movie_title_from_results(doc_by_id) -> str | None:
+    titles = [doc.title for doc in doc_by_id.values() if doc and doc.title]
+    if not titles:
+        return None
 
-def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
+    return max(set(titles), key=titles.count)
+
+def query_index(
+    query_embedding: np.ndarray,
+    query_type: str,
+    k: int = 5
+) -> List[Dict]:
 
     if query_embedding.ndim == 1:
         query_embedding = query_embedding.reshape(1, -1)
@@ -134,7 +223,8 @@ def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
     faiss.normalize_L2(query_embedding)
 
     index = _get_faiss_index()
-    scores, vector_ids = index.search(query_embedding, k)
+
+    scores, vector_ids = index.search(query_embedding, k * 3)
 
     scores = scores[0]
     vector_ids = vector_ids[0].tolist()
@@ -163,13 +253,33 @@ def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
     doc_rows = store2.fetch_by_doc_ids(list(doc_ids))
     doc_by_id = {row.doc_id: row for row in doc_rows}
 
+    allowed_sections = INTENT_SECTION_FILTERS.get(query_type)
+
+    require_same_title = query_type == "summary"
+    inferred_movie_title = None
+
+    if require_same_title:
+        inferred_movie_title = infer_movie_title_from_results(doc_by_id)
+
     results = []
 
     for vid, score in zip(vector_ids, scores):
         vec = vec_by_vid.get(vid)
-        doc = doc_by_id.get(vec["doc_id"]) if vec else None
+        if not vec:
+            continue
+
+        doc = doc_by_id.get(vec["doc_id"])
         if not doc:
             continue
+
+        if allowed_sections is not None:
+            section = (doc.section or "").lower()
+            if not any(s in section for s in allowed_sections):
+                continue
+
+        if require_same_title and inferred_movie_title:
+            if doc.title.lower() != inferred_movie_title.lower():
+                continue
 
         results.append({
             "score": float(score),
@@ -184,7 +294,34 @@ def query_index(query_embedding: np.ndarray, k: int = 5) -> List[Dict]:
             "end_char": doc.end_char,
         })
 
+        if len(results) >= k:
+            break
+
+    if not results:
+        for vid, score in zip(vector_ids, scores):
+            vec = vec_by_vid.get(vid)
+            doc = doc_by_id.get(vec["doc_id"]) if vec else None
+            if not doc:
+                continue
+
+            results.append({
+                "score": float(score),
+                "vector_id": vid,
+                "chunk_id": vec["chunk_id"],
+                "doc_id": vec["doc_id"],
+                "title": doc.title,
+                "text": doc.text,
+                "source": doc.source,
+                "section": doc.section,
+                "start_char": doc.start_char,
+                "end_char": doc.end_char,
+            })
+
+            if len(results) >= k:
+                break
+
     return results
+
 
 def query_text(query: str, k: int = 5) -> List[Dict]:
     
@@ -199,7 +336,7 @@ def query_text(query: str, k: int = 5) -> List[Dict]:
         show_progress_bar=False,
     )
 
-    results = query_index(query_embedding, k=k)
+    results = query_index(query_embedding, query_type, k=k)
 
     for r in results:
         r["query_type"] = query_type

@@ -1,4 +1,4 @@
-import { Lightbulb, Info } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 
 export default function ProTips() {
   return (
