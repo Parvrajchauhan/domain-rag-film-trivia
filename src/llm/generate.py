@@ -14,6 +14,7 @@ QUESTION_TOP_K = {
     "character": 5,
     "explanation": 5,
     "general": 5,
+    "summary":6
 }
 
 
@@ -60,8 +61,8 @@ def generate_answer(
 ) -> dict:
 
     retrieved = retrieve_by_text(query, k=15)
-
-    reranked = rerank(query, retrieved, top_k=9)
+    q_type = retrieved[0].get("query_type", "general")
+    reranked = rerank(query, retrieved, query_type=q_type, top_k=9)
 
     if not reranked:
         return {
@@ -71,7 +72,6 @@ def generate_answer(
             "query_type": "general",
         }
 
-    q_type = reranked[0].get("query_type", "general")
     query_r = reranked[0].get("rewritten_query") or query
     movie = reranked[0].get("title", "unknown")
 

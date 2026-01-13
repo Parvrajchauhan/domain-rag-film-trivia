@@ -65,7 +65,7 @@ def generate(query: str,judge):
     retrieved_chunks = answer["context"]
     if handle_abstention(ans):
         return {
-            "answer": answer,
+            "answer": ans,
             "sources": [],
             "hallucination_score": 1.0,
             "confidence": 0.0,

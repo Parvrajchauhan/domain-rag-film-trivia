@@ -10,9 +10,3 @@ def retrieve_by_text(
 ) -> List[Dict]:
     return query_text(query, k=k)
 
-
-def retrieve_by_embedding(
-    query_embedding,
-    k: int = 5
-) -> List[Dict]:
-    return query_index(query_embedding, k=k)
