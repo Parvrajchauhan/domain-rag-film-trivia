@@ -104,7 +104,7 @@ def sanity_check_no_nan_scores(query: str):
 
 
 def main():
-    query = "all characters in Avatar movie?"
+    query = "What is the name of the main character in The Matrix?"
     sanity_check_rerank(query)
     print("\n ALL SANITY CHECKS PASSED")
 

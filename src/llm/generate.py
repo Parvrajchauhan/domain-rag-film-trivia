@@ -4,6 +4,7 @@ from .safety import postprocess_answer
 
 from ..retrieval.retrieve import retrieve_by_text
 from ..retrieval.rerank import rerank
+from .filter_chunks import filter_supported_chunks
 
 
 QUESTION_TOP_K = {
@@ -92,9 +93,18 @@ def generate_answer(
 
     answer = postprocess_answer(answer)
 
+    final_context = filter_supported_chunks(
+        answer=answer,
+        chunks=reranked,
+        sim_threshold=0.55
+    )
+
+    if not final_context:
+        final_context = []
+
     return {
         "answer": answer,
-        "context": reranked,
+        "context": final_context,
         "movie": movie,
         "query_type": q_type,
     }
