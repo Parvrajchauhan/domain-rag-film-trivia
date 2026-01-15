@@ -4,11 +4,10 @@ from typing import List, Dict
 from .load_index import load_faiss_index
 from .metadata_store import MetadataStore
 from ..document.db_save import MetadataStore2
-from ..embedding.embedding_model import load_embedding_model
+import  api.core.model_store as model_store
 
 _faiss_index = None
 _metadata_store = None
-_embedding_model = None
 _metadata_store2 =None
 
 
@@ -88,11 +87,7 @@ def _get_metadata_store2():
         _metadata_store2 = MetadataStore2()
     return _metadata_store2
 
-def _get_embedding_model():
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = load_embedding_model()
-    return _embedding_model
+
 
 from typing import List, Dict
 
@@ -329,8 +324,10 @@ def query_text(query: str, k: int = 5) -> List[Dict]:
 
     rewritten_query = rewrite_query_by_intent(query, query_type)
 
-    model = _get_embedding_model()
-    query_embedding = model.encode(
+    if model_store.embedding_model is None:
+        raise RuntimeError("Embedding model not loaded")
+    
+    query_embedding = model_store.embedding_model.encode(
         rewritten_query,
         normalize_embeddings=True,
         show_progress_bar=False,

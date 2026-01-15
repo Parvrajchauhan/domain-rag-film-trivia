@@ -96,6 +96,7 @@ def generate_answer(
     final_context = filter_supported_chunks(
         answer=answer,
         chunks=reranked,
+        query_type=q_type,
         sim_threshold=0.55
     )
 
@@ -105,6 +106,7 @@ def generate_answer(
     return {
         "answer": answer,
         "context": final_context,
+        "context_raw": reranked,
         "movie": movie,
         "query_type": q_type,
     }

@@ -28,8 +28,10 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
 def filter_supported_chunks(
     answer: str,
     chunks: List[Dict],
+    query_type: str,
     sim_threshold: float = 0.55
-) -> List[Dict]:
+):
+
 
     if not answer or not chunks:
         return []
@@ -55,11 +57,14 @@ def filter_supported_chunks(
 
     for chunk, emb in zip(chunks, chunk_embs):
 
-        # Stage 1 — hard filter
-        if not _hard_filter(answer, chunk["text"]):
+        if query_type in {"fact", "director"}:
+            hard_pass = True
+        else:
+            hard_pass = _hard_filter(answer, chunk["text"])
+    
+        if not hard_pass:
             continue
 
-        # Stage 2 — semantic filter
         sim = _cosine(answer_emb, emb)
         if sim < sim_threshold:
             continue
@@ -68,5 +73,6 @@ def filter_supported_chunks(
             **chunk,
             "support_score": float(sim)
         })
+
 
     return supported

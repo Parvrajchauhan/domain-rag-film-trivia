@@ -47,15 +47,6 @@ ABSTENTION_ANSWERS = {
 def handle_abstention(answer: str):
     return answer.strip().lower() in ABSTENTION_ANSWERS
 
-def validate_retrieval(chunks: list[dict]):
-    if not chunks:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error": "EMPTY_RETRIEVAL",
-                "message": "No relevant context found for the query."
-            }
-        )
 
 
 def generate(query: str,judge):
@@ -63,6 +54,7 @@ def generate(query: str,judge):
     answer= run_with_timeout(lambda: generate_answer(query))
     ans = answer["answer"]
     retrieved_chunks = answer["context"]
+    reranked_chunks = answer.get("context_raw", retrieved_chunks)
     if handle_abstention(ans):
         return {
             "answer": ans,
@@ -72,7 +64,8 @@ def generate(query: str,judge):
             "latency_ms": 0
         }
 
-    validate_retrieval(retrieved_chunks)
+    if not retrieved_chunks:
+        retrieved_chunks=reranked_chunks[:4]
     result=hallucination_score(ans,retrieved_chunks,judge)
     latency_ms = (time.perf_counter() - start) * 1000
     sources=build_citations(retrieved_chunks)

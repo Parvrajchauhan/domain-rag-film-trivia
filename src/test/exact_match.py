@@ -3,7 +3,11 @@ import re
 
 
 def load_judge_model():
-    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    return CrossEncoder(
+        "cross-encoder/ms-marco-MiniLM-L-6-v2",
+        device="cpu",
+        local_files_only=True
+    )
 
 
 def _normalize(text: str) -> str:
