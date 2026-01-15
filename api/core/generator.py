@@ -65,7 +65,7 @@ def generate(query: str,judge):
         }
 
     if not retrieved_chunks:
-        retrieved_chunks=reranked_chunks[:4]
+        retrieved_chunks=reranked_chunks[:3]
     result=hallucination_score(ans,retrieved_chunks,judge)
     latency_ms = (time.perf_counter() - start) * 1000
     sources=build_citations(retrieved_chunks)

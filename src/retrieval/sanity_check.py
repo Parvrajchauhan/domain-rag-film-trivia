@@ -104,7 +104,7 @@ def sanity_check_no_nan_scores(query: str):
 
 
 def main():
-    query = "What is the name of the main character in The Matrix?"
+    query = "Who directed the movie Her (2013)?"
     sanity_check_rerank(query)
     print("\n ALL SANITY CHECKS PASSED")
 

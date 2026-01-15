@@ -5,6 +5,7 @@ import QueryBox from "@/components/QueryBox";
 import AnswerCard from "@/components/AnswerCard";
 import ProTips from "@/components/ProTips";
 import { QueryResponse } from "@/types";
+import InfoPanel from "@/components/Info";
 
 export default function Page() {
   const [data, setData] = useState<QueryResponse | null>(null);
@@ -13,6 +14,7 @@ export default function Page() {
 
   return (
     <div className="w-full px-4">
+      <InfoPanel />
       {/* Header */}
       <div className="text-center py-10">
         <h1 className="gradient-heading text-4xl font-bold mb-2">

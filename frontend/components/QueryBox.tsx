@@ -5,11 +5,7 @@ import { askQuestion } from "@/lib/api";
 import { QueryResponse } from "@/types";
 import { 
   Send, 
-  Sparkles, 
   Loader2, 
-  AlertCircle,
-  Lightbulb,
-  TrendingUp,
   Search
 } from "lucide-react";
 
@@ -57,7 +53,7 @@ export default function QueryBox({
   };
 
   const exampleQuestions = [
-    "What is the plot of The Shawshank Redemption?",
+    "What is the summary of The Shawshank Redemption?",
     "Who directed The Godfather?",
     "What is the name of the main character in The Matrix?",
   ];

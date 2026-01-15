@@ -7,7 +7,6 @@ import {
   BookOpen,
   ChevronRight,
   CheckCircle2,
-  ExternalLink,
 } from "lucide-react";
 
 // Types
@@ -92,7 +91,7 @@ export default function AnswerCard({
         <Metric
           icon={<Shield className="w-4 h-4 text-violet-400" />}
           label="Reliability"
-          value={`${Math.round((1 - data.hallucination_score) * 100)}%`}
+          value={`${Math.round((1 - Math.exp(-data.sources.length)) * 100)}%`}
         />
         <Metric
           icon={<Clock className="w-4 h-4 text-purple-400" />}

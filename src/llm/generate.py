@@ -75,7 +75,25 @@ def generate_answer(
 
     query_r = reranked[0].get("rewritten_query") or query
     movie = reranked[0].get("title", "unknown")
+    extracted_movie=reranked[0].get("extracted_movie", None)
+    movie_scores = {}
+    for c in reranked:
+        title = c.get("title")
+        score = c.get("rerank_score", 0.0)
 
+        if not title:
+            continue
+
+        movie_scores[title] = movie_scores.get(title, 0.0) + score
+    unique_movies = list(movie_scores.keys())
+    if len(unique_movies) > 7:
+        return {
+            "answer": "This movie title is ambiguous. Please specify the release year or full title.",
+            "context": [],
+            "movie": "unknown",
+            "query_type": "general",
+        }
+        
     reranked = choose_top_k(reranked)
 
     prompt = build_prompt(

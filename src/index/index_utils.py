@@ -1,10 +1,12 @@
 import numpy as np
 import faiss
-from typing import List, Dict
+import re
+from typing import Optional, Dict,List
 from .load_index import load_faiss_index
 from .metadata_store import MetadataStore
 from ..document.db_save import MetadataStore2
 import  api.core.model_store as model_store
+from ..embedding.embedding_model import load_embedding_model
 
 _faiss_index = None
 _metadata_store = None
@@ -67,6 +69,30 @@ INTENT_SECTION_FILTERS = {
     "general": None
 }
 
+
+def extract_movie_from_query(query: str) -> Dict[str, Optional[str]]:
+  
+    result = {
+        "movie_title": None,
+    }
+
+    quoted = re.findall(r'"([^"]+)"', query)
+    if quoted:
+        result["movie_title"] = quoted[0].strip()
+
+    if result["movie_title"] is None:
+        tokens = re.findall(r'\b[A-Z][a-zA-Z0-9:-]+\b', query)
+        stopwords = {
+            "Who", "What", "When", "Where", "Which",
+            "Directed", "Director", "Movie", "Film"
+        }
+        candidates = [t for t in tokens if t not in stopwords]
+
+        if candidates:
+            candidates.sort(key=len)
+            result["movie_title"] = candidates[0]
+
+    return result
 
 def _get_faiss_index():
     global _faiss_index
@@ -321,13 +347,19 @@ def query_index(
 def query_text(query: str, k: int = 5) -> List[Dict]:
     
     query_type = classify_query_intent(query)
+    entity = extract_movie_from_query(query)
+    if entity["movie_title"]:
+        retrieval_filter = entity["movie_title"]
+    else:
+        retrieval_filter = None
 
     rewritten_query = rewrite_query_by_intent(query, query_type)
 
-    if model_store.embedding_model is None:
+    model =  load_embedding_model()
+    if model is None:
         raise RuntimeError("Embedding model not loaded")
-    
-    query_embedding = model_store.embedding_model.encode(
+
+    query_embedding = model.encode(
         rewritten_query,
         normalize_embeddings=True,
         show_progress_bar=False,
@@ -339,6 +371,7 @@ def query_text(query: str, k: int = 5) -> List[Dict]:
         r["query_type"] = query_type
         r["original_query"] = query
         r["rewritten_query"] = rewritten_query
+        r["extracted_movie"] = retrieval_filter
 
     return results
 
