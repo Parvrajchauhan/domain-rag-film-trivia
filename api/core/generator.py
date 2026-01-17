@@ -1,5 +1,5 @@
 from src.llm.generate import generate_answer
-from .evaluation import hallucination_score,compute_confidence
+from src.eval.evaluation import hallucination_score,compute_confidence
 import time
 from fastapi import  HTTPException
 
