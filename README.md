@@ -1,189 +1,187 @@
-Movie Trivia RAG Chatbot
+# Movie Trivia RAG Chatbot
 
-A Retrieval-Augmented Generation (RAG) based chatbot that answers movie-related questions using semantic search, reranking, and LLM-based generation.
+> A production-oriented Retrieval-Augmented Generation system for factual movie Q&A — built around correctness, evaluation, and real-world ambiguity handling.
 
-This project is designed with a focus on correctness, evaluation, and real-world ambiguity handling rather than demo-only outputs.
+---
 
-Project Overview
+## Overview
 
-The system allows users to ask factual questions about movies such as:
+Most LLM-based Q&A systems hallucinate when pushed beyond their training distribution. This project takes a different approach: instead of relying on an LLM's internal knowledge, every answer is grounded in retrieved context from a structured movie dataset.
 
+Ask it anything:
+
+```
 Who directed Inception?
 Which Spider-Man movie had Venom?
 Who acted in Interstellar?
+```
 
-Instead of relying solely on an LLM’s internal knowledge, the system retrieves relevant context from a movie dataset and generates grounded responses.
+The system retrieves, reranks, aggregates, and only then generates — minimizing hallucination at every stage.
 
-Key Features
-Semantic search using embeddings
-End-to-end RAG pipeline (retrieval → reranking → generation)
-Movie-level aggregation to reduce ambiguity
-Evaluation metrics (Precision@K, Recall@K)
-Controlled context to minimize hallucinations
-Modular architecture for future extensions
-System Architecture
+---
+
+## Architecture
+
+```
 User Query
-   ↓
-Query Embedding
-   ↓
-Vector Retrieval (Top-K)
-   ↓
-Reranking + Aggregation
-   ↓
-Context Selection
-   ↓
-LLM Generation
-   ↓
+    │
+    ▼
+Query Embedding          (sentence-transformers)
+    │
+    ▼
+Vector Retrieval         (FAISS, Top-K cosine similarity)
+    │
+    ▼
+Reranking + Aggregation  (score aggregation per movie title)
+    │
+    ▼
+Context Selection        (top-ranked movie context only)
+    │
+    ▼
+LLM Generation           (grounded, context-constrained)
+    │
+    ▼
 Final Answer
-Core Components
-1. Data Processing and Chunking
+```
 
-Movie data is split into structured chunks containing:
+---
 
-Movie title
-Cast
-Director
-Plot summary
+## Key Design Decisions
 
-Chunking improves retrieval precision and reduces irrelevant context.
+### Section-Aware Chunking
 
-2. Embeddings
-Generated using sentence-transformers
-Converts text into dense vector representations
-Enables semantic similarity search instead of keyword matching
-3. Vector Retrieval
-Retrieves top-K relevant chunks using cosine similarity
-Optimized for high recall to ensure relevant data is not missed
-4. Reranking and Aggregation (Key Design Decision)
+Movie data is split into typed chunks — `title`, `cast`, `director`, `plot` — rather than ingested as flat documents. This improves retrieval precision by letting the reranker score sections independently and surface the most relevant field per query.
 
-Instead of directly passing retrieved chunks to the LLM:
+### Movie-Level Aggregation
 
-Chunks are grouped by movie title
-Relevance scores are aggregated per movie
-Movies are ranked based on total score
-The most relevant movie context is selected
+Retrieved chunks are grouped by movie title before generation. Relevance scores are summed per movie, and the highest-scoring movie's full context is passed to the LLM. This eliminates a common failure mode: mixing cast or plot details from multiple films in a single answer.
 
-This approach reduces:
+### Constrained Generation
 
-Mixing of multiple movies in one answer
-Franchise-level confusion
-Hallucinated combinations
-5. Answer Generation
-LLM generates answers strictly from retrieved context
-Reduces hallucination by constraining generation
-Produces concise and factual responses
-Evaluation Strategy
+The LLM is prompted strictly from retrieved context. It is not allowed to supplement with parametric knowledge. This trades recall on obscure queries for a hard guarantee against hallucination on known ones.
 
-The system includes explicit evaluation using:
+---
 
-Precision@K
-Recall@K
-Manual labeling:
-Correct
-Hallucinated
+## Evaluation
 
-Example:
+The system uses explicit retrieval metrics rather than subjective output quality:
 
-Query: Who directed Inception?
-Answer: Christopher Nolan
-Precision@5: 0.50
-Recall@5: 1.00
-Label: Correct
+| Metric | Description |
+|---|---|
+| Precision@K | Fraction of top-K retrieved chunks that are relevant |
+| Recall@K | Fraction of relevant chunks captured in top-K |
+| Answer label | `Correct` / `Hallucinated` — manually annotated |
 
-Evaluation is used to guide improvements rather than relying on subjective output quality.
+**Example:**
 
-Known Limitations
+```
+Query:      Who directed Inception?
+Answer:     Christopher Nolan
+P@5:        0.50
+R@5:        1.00
+Label:      Correct ✓
+```
 
-This version intentionally does not solve all edge cases.
+Evaluation is used to guide architectural changes, not just report results.
 
-1. Generic Movie Titles
+---
 
-Movies with short or common names (e.g., "Her", "Up") may lead to:
+## Known Limitations
 
-Ambiguous retrieval
-Reduced precision
-2. Franchise Ambiguity
+These are documented intentionally — known failures are more useful than hidden ones.
 
-Queries like:
+| Issue | Cause | Status |
+|---|---|---|
+| Generic movie titles (`Her`, `Up`) | Ambiguous retrieval | Open |
+| Franchise queries (`Who played Spider-Man?`) | Multi-movie score mixing | Open |
 
-Who played Spider-Man?
+---
 
-may mix multiple versions across different movies.
+## Tech Stack
 
-3. No Explicit Entity Extraction
+| Layer | Technology |
+|---|---|
+| Embeddings | `sentence-transformers` |
+| Vector store | FAISS |
+| Generation | Groq |
+| Frontend | Next.js |
 
-The system does not yet use:
+---
 
-Named Entity Recognition
-Rule-based disambiguation
+## Project Structure
 
-These are planned for future versions.
-
-Tech Stack
-Python
-Sentence-Transformers
-FAISS (or equivalent vector database)
-LLM API (OpenAI or compatible)
-FastAPI (for backend, planned)
-Next.js (for frontend, planned)
-Project Structure
+```
 movie-rag-chatbot/
 ├── data/
-│   └── movie_documents/
-├── embeddings/
-├── retrieval/
-├── reranking/
-├── evaluation/
-├── api/
-├── frontend/
+│   └── movie_documents/     # raw and chunked movie data
+├── embeddings/              # embedding generation scripts
+├── retrieval/               # FAISS index + search logic
+├── reranking/               # score aggregation + context selection
+├── evaluation/              # Precision@K, Recall@K, labeling
+├── api/                     # FastAPI app (planned)
+├── frontend/                # Next.js UI (planned)
+├── main.py
+├── requirements.txt
 └── README.md
-Setup Instructions
-1. Clone the repository
+```
+
+---
+
+## Setup
+
+**1. Clone and enter the repo**
+
+```bash
 git clone <your-repo-url>
 cd movie-rag-chatbot
-2. Create virtual environment
+```
+
+**2. Create and activate a virtual environment**
+
+```bash
 python -m venv venv
-source venv/bin/activate      # Linux / Mac
-venv\Scripts\activate         # Windows
-3. Install dependencies
+source venv/bin/activate       # Linux / macOS
+venv\Scripts\activate          # Windows
+```
+
+**3. Install dependencies**
+
+```bash
 pip install -r requirements.txt
-4. Run the pipeline
+cd frontend && npm install
+```
+
+**4. Run the pipeline**
+
+```bash
 python main.py
-Design Philosophy
-Correctness over complexity
-Known limitations over hidden failures
-Evaluation-driven development
-Minimal abstraction in early versions
+```
 
-This project avoids premature use of:
+---
 
-Agent frameworks
-Heavy orchestration tools
-Over-engineered pipelines
-Roadmap (Version 2)
+## Design Philosophy
 
-Planned improvements:
+This project prioritizes correctness over feature count. Specifically:
 
-Movie entity extraction for better disambiguation
-Improved handling of franchises
-LangChain-based orchestration
-Optional agent integration
-API deployment with FastAPI
-Frontend integration with Next.js
-CI/CD pipeline
-Status
+- **Known limitations over hidden failures** — every edge case is documented, not papered over
+- **Evaluation-driven development** — changes are validated with metrics, not vibes
+- **Minimal abstraction in v1** — no agent frameworks, no heavy orchestration; the pipeline is readable end-to-end
+- **Grounded generation** — the LLM is a synthesizer, not a knowledge source
 
-Version: v1
-State: Stable and ready for deployment
-Next step: API + frontend integration
+---
 
-Author
+## Roadmap
 
-Parv Raj
+**v2 planned improvements:**
 
-If you want, I can next:
+- [ ] Named entity recognition for movie disambiguation
+- [ ] Improved franchise handling (per-installment scoring)
+- [ ] FastAPI backend with documented endpoints
+- [ ] CI/CD pipeline with GitHub Actions
+- [ ] Optional LangChain orchestration layer
 
-Generate a clean architecture diagram image for GitHub
-Add badges (build, license, etc.)
-Create a proper requirements.txt
-Or write a deployment guide (Docker + cloud)
+---
+
+## Author
+
+**Parv Raj Chauhan**
