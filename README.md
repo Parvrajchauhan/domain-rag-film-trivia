@@ -110,19 +110,44 @@ These are documented intentionally — known failures are more useful than hidde
 
 ## Project Structure
 
-```
-movie-rag-chatbot/
-├── data/
-│   └── movie_documents/     # raw and chunked movie data
-├── embeddings/              # embedding generation scripts
-├── retrieval/               # FAISS index + search logic
-├── reranking/               # score aggregation + context selection
-├── evaluation/              # Precision@K, Recall@K, labeling
-├── api/                     # FastAPI app (planned)
-├── frontend/                # Next.js UI (planned)
-├── main.py
-├── requirements.txt
-└── README.md
+```domain-rag-film-trivia/
+├── api/                     # FastAPI backend
+│   ├── core/               # Core logic (generation, model store)
+│   │   ├── generator.py
+│   │   └── model_store.py
+│   ├── routes/             # API endpoints
+│   │   └── routes.py
+│   ├── main.py             # FastAPI entry point
+│   └── schemas.py          # Request/response schemas
+│
+├── frontend/               # Next.js frontend (App Router)
+│   ├── app/                # Pages & API routes
+│   ├── components/         # UI components (QueryBox, AnswerCard, etc.)
+│   ├── lib/                # API utilities
+│   ├── public/             # Static assets
+│   └── types/              # TypeScript types
+│
+├── src/                    # Core RAG pipeline
+│   ├── chunk/              # Text chunking logic
+│   ├── db/                 # Vector/database handling
+│   ├── document/           # Document processing
+│   ├── embedding/          # Embedding model loading & generation
+│   ├── index/              # Index building (FAISS / vector index)
+│   ├── ingest/             # Data ingestion pipeline
+│   ├── llm/                # LLM interaction logic
+│   ├── retrieval/          # Retrieval logic
+│   ├── eval/               # Evaluation (metrics, testing)
+│   └── test/               # Testing scripts
+│
+├── data/                   # Dataset (movie catalog, etc.)
+│   └── movie_catalog.csv
+│
+├── docs/                   # Documentation (optional)
+├── config.yaml             # Project configuration
+├── .env.example            # Environment variables template
+├── requirements.txt        # Python dependencies
+├── README.md
+└── mlflow.db               # Experiment tracking (MLflow)
 ```
 
 ---
