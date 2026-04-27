@@ -14,18 +14,25 @@ class MetadataStore:
         with self.engine.begin() as conn:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS chunks (
-                    vector_id INTEGER PRIMARY KEY,
+                    vector_id SERIAL PRIMARY KEY,
+
                     chunk_id TEXT NOT NULL,
-                    doc_id TEXT NOT NULL
+                    doc_id TEXT NOT NULL,
+
+                    text TEXT NOT NULL,
+
+                    source TEXT,
+                    section TEXT,
+                    title TEXT
                 );
             """))
 
     def insert_from_dataframe(self, df: pd.DataFrame) -> None:
 
         required_cols = {
-            "vector_id",
             "chunk_id",
-            "doc_id"
+            "doc_id",
+            "text"
         }
 
         missing = required_cols - set(df.columns)
@@ -34,9 +41,12 @@ class MetadataStore:
 
         records = [
             {
-                "vector_id": row.vector_id,
                 "chunk_id": row.chunk_id,
-                "doc_id": row.doc_id
+                "doc_id": row.doc_id,
+                "text": row.text,
+                "source": getattr(row, "source", None),
+                "section": getattr(row, "section", None),
+                "title": getattr(row, "title", None),
             }
             for row in df.itertuples(index=False)
         ]
@@ -48,16 +58,22 @@ class MetadataStore:
             conn.execute(
                 text("""
                     INSERT INTO chunks (
-                        vector_id,
                         chunk_id,
-                        doc_id
+                        doc_id,
+                        text,
+                        source,
+                        section,
+                        title
                     )
                     VALUES (
-                        :vector_id,
                         :chunk_id,
-                        :doc_id
+                        :doc_id,
+                        :text,
+                        :source,
+                        :section,
+                        :title
                     )
-                    ON CONFLICT (vector_id) DO NOTHING
+                    ON CONFLICT DO NOTHING
                 """),
                 records,
             )
@@ -72,7 +88,11 @@ class MetadataStore:
                     SELECT
                         vector_id,
                         chunk_id,
-                        doc_id
+                        doc_id,
+                        text,
+                        source,
+                        section,
+                        title
                     FROM chunks
                     WHERE vector_id = ANY(:vector_ids)
                     ORDER BY vector_id

@@ -1,18 +1,30 @@
 import numpy as np
 from typing import List, Dict
+from collections import defaultdict
 
 from src.embedding.embedding_model import load_embedding_model
 
 
 QUERY_TYPE_WEIGHTS = {
-    "fact": 1.25,
-    "director": 1.25,
-    "ending": 1.2,
-    "plot": 1.15,
-    "character": 1.15,
-    "explanation": 1.1,
-    "summary": 1.15,
+    "fact": 1.3,
+    "director": 1.35,
+    "ending": 1.25,
+    "plot": 1.2,
+    "character": 1.2,
+    "explanation": 1.15,
+    "summary": 1.2,
     "general": 1.0,
+}
+
+SECTION_WEIGHTS = {
+    "plot_setup": 1.3,
+    "plot_build_up": 1.3,
+    "plot_ending": 1.4,
+    "imdb_synopsis": 1.2,
+    "lead_section": 1.1,
+    "imdb_metadata": 1.2,
+    "production": 0.8,
+    "reception": 0.7,
 }
 
 
@@ -33,7 +45,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 def rerank(
     query: str,
     retrieved_chunks: List[Dict],
-    query_type: str,                    
+    query_type: str,
     top_k: int = 5,
     min_score: float = 0.15,
 ) -> List[Dict]:
@@ -68,7 +80,10 @@ def rerank(
     for chunk, emb in zip(retrieved_chunks, chunk_embs):
         sim = cosine_similarity(query_emb, emb)
 
-        final_score = sim * intent_weight
+        section = (chunk.get("section") or "").lower()
+        section_weight = SECTION_WEIGHTS.get(section, 1.0)
+
+        final_score = sim * intent_weight * section_weight
 
         if final_score < min_score:
             continue
@@ -78,15 +93,23 @@ def rerank(
             "rerank_score": float(final_score),
             "base_similarity": float(sim),
             "query_type": query_type,
-            "importance": float(intent_weight),
         })
 
     reranked.sort(key=lambda x: x["rerank_score"], reverse=True)
 
-    deduped = {}
+    doc_counts = defaultdict(int)
+    final_results = []
+
     for chunk in reranked:
         doc_id = chunk.get("doc_id")
-        if doc_id not in deduped:
-            deduped[doc_id] = chunk
 
-    return list(deduped.values())[:top_k]
+        if doc_counts[doc_id] >= 2:
+            continue
+
+        final_results.append(chunk)
+        doc_counts[doc_id] += 1
+
+        if len(final_results) >= top_k:
+            break
+
+    return final_results

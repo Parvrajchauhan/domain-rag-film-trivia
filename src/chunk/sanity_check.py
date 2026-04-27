@@ -1,59 +1,73 @@
 import pandas as pd
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "inbetween"
 CHUNKS_PATH = DATA_DIR / "retrieval_chunks.csv"
 
 
 def main():
     df = pd.read_csv(CHUNKS_PATH)
-    print(df["section"].value_counts())
-    print(df["section"].nunique())
+
+    print("BASIC STATS ")
     print(f"Total retrieval chunks: {len(df)}")
     print(f"Total parent documents: {df['doc_id'].nunique()}")
     print()
-    nan_doc_count = df[df["text"].isna()]["chunk_id"].nunique()
-    print(f"Documents with NaN text: {nan_doc_count}")
+
+    print(" SECTION DISTRIBUTION ")
+    print(df["section"].value_counts())
+    print(f"Unique sections: {df['section'].nunique()}")
+    print()
+
+    print("NULL CHECKS ")
+    print(f"Chunks with NaN text: {df['text'].isna().sum()}")
+    print(f"Chunks with empty text: {(df['text'].str.strip() == '').sum()}")
+    print()
 
     df["chunk_len"] = df["text"].str.len()
 
-    avg_len = df["chunk_len"].mean()
-    min_len = df["chunk_len"].min()
-    max_len = df["chunk_len"].max()
-
-    print(f"Average chunk length: {avg_len:.1f} chars")
-    print(f"Min chunk length: {min_len} chars")
-    print(f"Max chunk length: {max_len} chars")
+    print(" LENGTH STATS")
+    print(f"Average chunk length: {df['chunk_len'].mean():.1f} chars")
+    print(f"Min chunk length: {df['chunk_len'].min()} chars")
+    print(f"Max chunk length: {df['chunk_len'].max()} chars")
     print()
 
     short_chunks = df[df["chunk_len"] < 150]
-    print("=== SHORT CHUNKS CHECK ===")
+
+    print("SHORT CHUNKS CHECK ")
     print(f"Chunks < 150 chars: {len(short_chunks)}")
+
     if len(short_chunks) > 0:
         print(short_chunks[["chunk_id", "doc_id", "chunk_len"]].head())
     print()
 
-    overlap_issues = []
+    print("DUPLICATE CHECKS ")
 
-    for doc_id, g in df.sort_values("start_char").groupby("doc_id"):
-        prev_end = None
-        for _, row in g.iterrows():
-            if prev_end is not None:
-                if row["start_char"] < prev_end:
-                    overlap_issues.append((doc_id, row["chunk_id"]))
-            prev_end = row["end_char"]
+    dup_chunk_ids = df["chunk_id"].duplicated().sum()
+    print(f"Duplicate chunk_ids: {dup_chunk_ids}")
 
-    if overlap_issues:
-        print(f"Overlap detected in {len(overlap_issues)} retrieval chunks")
-        print(overlap_issues[:5])
-    else:
-        print("No overlap detected")
+    dup_texts = df["text"].duplicated().sum()
+    print(f"Duplicate texts: {dup_texts}")
     print()
 
-    bad_offsets = df[df["end_char"] <= df["start_char"]]
-    print(f"Chunks with invalid offsets: {len(bad_offsets)}")
-    if len(bad_offsets) > 0:
-        print(bad_offsets[["chunk_id", "start_char", "end_char"]].head())
+    print(" CHUNKS PER DOCUMENT ")
+
+    chunks_per_doc = df.groupby("doc_id")["chunk_id"].count()
+
+    print(f"Avg chunks per doc: {chunks_per_doc.mean():.2f}")
+    print(f"Min chunks per doc: {chunks_per_doc.min()}")
+    print(f"Max chunks per doc: {chunks_per_doc.max()}")
+    print()
+
+    print("TITLE CHECK")
+
+    missing_titles = df["title"].isna().sum()
+    print(f"Chunks missing title: {missing_titles}")
+
+    title_not_in_text = df[~df["text"].str.startswith("Title:")]
+    print(f"Chunks missing 'Title:' prefix: {len(title_not_in_text)}")
+
+    if len(title_not_in_text) > 0:
+        print(title_not_in_text[["chunk_id", "doc_id"]].head())
     print()
 
 

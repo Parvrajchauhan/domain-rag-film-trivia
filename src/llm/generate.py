@@ -1,3 +1,5 @@
+from collections import Counter
+
 from .client import generate_answer as groq_generate
 from .prompt_temp import build_prompt
 from .safety import postprocess_answer
@@ -15,7 +17,7 @@ QUESTION_TOP_K = {
     "character": 5,
     "explanation": 5,
     "general": 5,
-    "summary":6
+    "summary": 6,
 }
 
 
@@ -61,8 +63,22 @@ def generate_answer(
     max_tokens: int = 256,
 ) -> dict:
 
+    #  STEP 1: Retrieve
     retrieved = retrieve_by_text(query, k=15)
-    q_type = retrieved[0].get("query_type", "general")
+
+    if not retrieved:
+        return {
+            "answer": "I could not find relevant information.",
+            "context": [],
+            "movie": "unknown",
+            "query_type": "general",
+        }
+        
+    #  STEP 2: Robust query type detection
+    types = [c.get("query_type", "general") for c in retrieved]
+    q_type = Counter(types).most_common(1)[0][0]
+
+    #  STEP 3: Rerank
     reranked = rerank(query, retrieved, query_type=q_type, top_k=9)
 
     if not reranked:
@@ -70,12 +86,10 @@ def generate_answer(
             "answer": "I don't know based on the given context.",
             "context": [],
             "movie": "unknown",
-            "query_type": "general",
+            "query_type": q_type,
         }
 
-    query_r = reranked[0].get("rewritten_query") or query
-    movie = reranked[0].get("title", "unknown")
-    extracted_movie=reranked[0].get("extracted_movie", None)
+    #  STEP 4: Compute movie scores
     movie_scores = {}
     for c in reranked:
         title = c.get("title")
@@ -85,16 +99,55 @@ def generate_answer(
             continue
 
         movie_scores[title] = movie_scores.get(title, 0.0) + score
-    unique_movies = list(movie_scores.keys())
-    if len(unique_movies) > 7:
+
+    #  STEP 5: Pick best movie
+    movie = max(movie_scores, key=movie_scores.get) if movie_scores else "unknown"
+
+    #  STEP 6: Override with extracted movie (if available)
+    extracted_movie = reranked[0].get("extracted_movie")
+    if extracted_movie:
+        movie = extracted_movie
+
+    #  STEP 7: Ambiguity check (score-based)
+    sorted_movies = sorted(movie_scores.items(), key=lambda x: x[1], reverse=True)
+
+    if len(sorted_movies) > 1:
+        top_score = sorted_movies[0][1]
+        second_score = sorted_movies[1][1]
+
+        if second_score / top_score > 0.75:
+            return {
+                "answer": "This query is ambiguous. Please specify the movie more clearly.",
+                "context": [],
+                "movie": "unknown",
+                "query_type": "general",
+            }
+
+    #  STEP 8: Enforce movie consistency
+    reranked = [c for c in reranked if c.get("title") == movie]
+
+    if not reranked:
         return {
-            "answer": "This movie title is ambiguous. Please specify the release year or full title.",
+            "answer": "I could not find consistent information for a single movie.",
             "context": [],
             "movie": "unknown",
-            "query_type": "general",
+            "query_type": q_type,
         }
-        
+
+    #  STEP 9: Weak confidence fallback
+    if reranked[0]["rerank_score"] < 0.2:
+        return {
+            "answer": "I could not find a confident answer in the provided context.",
+            "context": [],
+            "movie": "unknown",
+            "query_type": q_type,
+        }
+
+    #  STEP 10: Adaptive top-k selection
     reranked = choose_top_k(reranked)
+
+    #  STEP 11: Build prompt
+    query_r = reranked[0].get("rewritten_query") or query
 
     prompt = build_prompt(
         query=query_r,
@@ -103,27 +156,29 @@ def generate_answer(
         movie=movie,
     )
 
+    #  STEP 12: Generate answer (lower temp for factual queries)
+    temperature = 0.05 if q_type in ["fact", "director"] else 0.2
+
     answer = groq_generate(
         prompt=prompt,
         max_tokens=max_tokens,
-        temperature=0.2,
+        temperature=temperature,
     )
 
+    #  STEP 13: Postprocess
     answer = postprocess_answer(answer)
 
+    #  STEP 14: Filter supported chunks
     final_context = filter_supported_chunks(
         answer=answer,
         chunks=reranked,
         query_type=q_type,
-        sim_threshold=0.55
+        sim_threshold=0.55,
     )
-
-    if not final_context:
-        final_context = []
 
     return {
         "answer": answer,
-        "context": final_context,
+        "context": final_context or [],
         "context_raw": reranked,
         "movie": movie,
         "query_type": q_type,

@@ -67,26 +67,32 @@ def clean_text(text: str) -> str:
 def text_for_hashing(text: str) -> str:
     return clean_text(text).lower()
 
+def get_text_columns(df):
+    wiki_cols = {
+        "lead_section", "plot_setup", "plot_build_up",
+        "plot_ending", "production", "reception"
+    }
+
+    imdb_cols = {
+        "synopsis", "director", "genre",
+        "language", "country", "awards", "actors"
+    }
+
+    cols = set(df.columns)
+
+    if "wiki_url" in cols:
+        return list(wiki_cols & cols)
+
+    elif "imdb_id" in cols:
+        return list(imdb_cols & cols)
+
+    return []
+
 
 def process_file(path: str):
     df = pd.read_csv(path, encoding="utf-8")
 
-    TEXT_COLUMNS = {
-        "synopsis",
-        "summaries",
-        "trivia",
-        "goofs_continuity",
-        "goofs_factual",
-        "lead_section",
-        "plot_setup",
-        "plot_build_up",
-        "plot_ending",
-        "production",
-        "reception",
-    }
-
-    present_text_cols = [c for c in TEXT_COLUMNS if c in df.columns]
-
+    present_text_cols = get_text_columns(df)
     out_name = os.path.basename(path).replace(".csv", "_clean.csv")
     out_path = os.path.join(OUT_DIR, out_name)
 

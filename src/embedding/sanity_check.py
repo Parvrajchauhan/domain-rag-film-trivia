@@ -67,7 +67,6 @@ def main():
 
     print("Chunk ID:", row["chunk_id"])
     print("Title / Section:", row["title"], "—", row["section"])
-    print("Offsets:", row["start_char"], "-", row["end_char"])
     print("Text preview:", row.get("text", "")[:150])
     print("Vector norm:", np.linalg.norm(vector))
 

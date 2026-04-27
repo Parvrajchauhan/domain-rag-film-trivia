@@ -3,4 +3,4 @@ database:
   password: root
   host: localhost
   port: 5432
-  name: FLIM_RAG
+  name: movie_rag

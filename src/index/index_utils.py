@@ -4,95 +4,59 @@ import re
 from typing import Optional, Dict,List
 from .load_index import load_faiss_index
 from .metadata_store import MetadataStore
-from ..document.db_save import MetadataStore2
 import  api.core.model_store as model_store
 from ..embedding.embedding_model import load_embedding_model
+from typing import List, Dict
 
 _faiss_index = None
 _metadata_store = None
-_metadata_store2 =None
-
 
 INTENT_SECTION_FILTERS = {
 
-    # Short factual / entity lookups
     "director": {
+        "imdb_metadata",
         "lead_section",
-        "production",
-        "synopsis"
+        "production"
     },
 
     "fact": {
         "lead_section",
-        "synopsis",
-        "reception",
-        "awards_finance"
+        "imdb_metadata",
+        "reception"
     },
 
-    # High-level overview (NOT full plot)
     "summary": {
         "lead_section",
-        "synopsis",
-        "summaries"
+        "imdb_synopsis"
     },
 
-    # Detailed story progression
     "plot": {
         "plot_setup",
         "plot_build_up",
-        "synopsis",
-        "summaries"
-    },
-
-    # Final resolution only
-    "ending": {
         "plot_ending",
-        "summaries"
+        "imdb_synopsis"
     },
 
-    # Cause–effect, reasoning-heavy answers
+    "ending": {
+        "plot_ending"
+    },
+
     "explanation": {
         "plot_build_up",
         "plot_ending",
         "production"
     },
 
-    # Character actions / arcs
     "character": {
         "plot_setup",
         "plot_build_up",
         "plot_ending",
-        "synopsis"
+        "imdb_synopsis"
     },
 
-    # Catch-all (no filtering)
     "general": None
 }
 
-
-def extract_movie_from_query(query: str) -> Dict[str, Optional[str]]:
-  
-    result = {
-        "movie_title": None,
-    }
-
-    quoted = re.findall(r'"([^"]+)"', query)
-    if quoted:
-        result["movie_title"] = quoted[0].strip()
-
-    if result["movie_title"] is None:
-        tokens = re.findall(r'\b[A-Z][a-zA-Z0-9:-]+\b', query)
-        stopwords = {
-            "Who", "What", "When", "Where", "Which",
-            "Directed", "Director", "Movie", "Film"
-        }
-        candidates = [t for t in tokens if t not in stopwords]
-
-        if candidates:
-            candidates.sort(key=len)
-            result["movie_title"] = candidates[0]
-
-    return result
 
 def _get_faiss_index():
     global _faiss_index
@@ -106,18 +70,6 @@ def _get_metadata_store():
     if _metadata_store is None:
         _metadata_store = MetadataStore()
     return _metadata_store
-
-def _get_metadata_store2():
-    global _metadata_store2
-    if _metadata_store2 is None:
-        _metadata_store2 = MetadataStore2()
-    return _metadata_store2
-
-
-
-from typing import List, Dict
-
-
 
 def classify_query_intent(query: str) -> str:
     q = query.lower().strip()
@@ -231,6 +183,7 @@ def infer_movie_title_from_results(doc_by_id) -> str | None:
 
     return max(set(titles), key=titles.count)
 
+
 def query_index(
     query_embedding: np.ndarray,
     query_type: str,
@@ -250,69 +203,59 @@ def query_index(
     scores = scores[0]
     vector_ids = vector_ids[0].tolist()
 
-    valid = [(vid, score) for vid, score in zip(vector_ids, scores) if vid != -1]
+    valid = [
+        (vid, score)
+        for vid, score in zip(vector_ids, scores)
+        if vid != -1 and score > 0.2
+    ]
+
     if not valid:
         return []
 
     vector_ids, scores = zip(*valid)
 
     store = _get_metadata_store()
-    store2 = _get_metadata_store2()
+    rows = store.fetch_by_vector_ids(list(vector_ids))
 
-    vec_rows = store.fetch_by_vector_ids(list(vector_ids))
-
-    vec_by_vid = {}
-    doc_ids = set()
-
-    for row in vec_rows:
-        vec_by_vid[row.vector_id] = {
-            "chunk_id": row.chunk_id,
-            "doc_id": row.doc_id,
-        }
-        doc_ids.add(row.doc_id)
-
-    doc_rows = store2.fetch_by_doc_ids(list(doc_ids))
-    doc_by_id = {row.doc_id: row for row in doc_rows}
+    row_by_vid = {row.vector_id: row for row in rows}
 
     allowed_sections = INTENT_SECTION_FILTERS.get(query_type)
 
+    # Infer dominant movie (for summary)
     require_same_title = query_type == "summary"
     inferred_movie_title = None
 
     if require_same_title:
-        inferred_movie_title = infer_movie_title_from_results(doc_by_id)
+        titles = [r.title for r in rows if r and r.title]
+        if titles:
+            inferred_movie_title = max(set(titles), key=titles.count)
 
     results = []
 
     for vid, score in zip(vector_ids, scores):
-        vec = vec_by_vid.get(vid)
-        if not vec:
-            continue
 
-        doc = doc_by_id.get(vec["doc_id"])
-        if not doc:
+        row = row_by_vid.get(vid)
+        if not row:
             continue
 
         if allowed_sections is not None:
-            section = (doc.section or "").lower()
-            if not any(s in section for s in allowed_sections):
+            section = (row.section or "").lower()
+            if section not in allowed_sections:
                 continue
 
         if require_same_title and inferred_movie_title:
-            if doc.title.lower() != inferred_movie_title.lower():
+            if (row.title or "").lower() != inferred_movie_title.lower():
                 continue
 
         results.append({
             "score": float(score),
             "vector_id": vid,
-            "chunk_id": vec["chunk_id"],
-            "doc_id": vec["doc_id"],
-            "title": doc.title,
-            "text": doc.text,
-            "source": doc.source,
-            "section": doc.section,
-            "start_char": doc.start_char,
-            "end_char": doc.end_char,
+            "chunk_id": row.chunk_id,
+            "doc_id": row.doc_id,
+            "title": row.title,
+            "text": row.text,
+            "source": row.source,
+            "section": row.section,
         })
 
         if len(results) >= k:
@@ -320,22 +263,19 @@ def query_index(
 
     if not results:
         for vid, score in zip(vector_ids, scores):
-            vec = vec_by_vid.get(vid)
-            doc = doc_by_id.get(vec["doc_id"]) if vec else None
-            if not doc:
+            row = row_by_vid.get(vid)
+            if not row:
                 continue
 
             results.append({
                 "score": float(score),
                 "vector_id": vid,
-                "chunk_id": vec["chunk_id"],
-                "doc_id": vec["doc_id"],
-                "title": doc.title,
-                "text": doc.text,
-                "source": doc.source,
-                "section": doc.section,
-                "start_char": doc.start_char,
-                "end_char": doc.end_char,
+                "chunk_id": row.chunk_id,
+                "doc_id": row.doc_id,
+                "title": row.title,
+                "text": row.text,
+                "source": row.source,
+                "section": row.section,
             })
 
             if len(results) >= k:
@@ -343,15 +283,9 @@ def query_index(
 
     return results
 
-
 def query_text(query: str, k: int = 5) -> List[Dict]:
     
     query_type = classify_query_intent(query)
-    entity = extract_movie_from_query(query)
-    if entity["movie_title"]:
-        retrieval_filter = entity["movie_title"]
-    else:
-        retrieval_filter = None
 
     rewritten_query = rewrite_query_by_intent(query, query_type)
 
@@ -371,7 +305,6 @@ def query_text(query: str, k: int = 5) -> List[Dict]:
         r["query_type"] = query_type
         r["original_query"] = query
         r["rewritten_query"] = rewritten_query
-        r["extracted_movie"] = retrieval_filter
 
     return results
 

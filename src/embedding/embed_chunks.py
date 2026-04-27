@@ -12,15 +12,7 @@ OUTPUT_DIR = "data/embeddings"
 
 
 REQUIRED_COLUMNS = {
-    "doc_id",
-    "chunk_id",
-    "text",
-    "start_char",
-    "end_char",
-    "source",
-    "section",
-    "title",
-    "created_at",
+    "doc_id","chunk_id","text","source","section","title","created_at"
 }
 
 
@@ -82,5 +74,5 @@ def embed_chunks(chunks_df: pd.DataFrame):
 
 
 if __name__ == "__main__":
-    chunks= pd.read_csv("data/processed/retrieval_chunks.csv")
+    chunks= pd.read_csv("data/inbetween/retrieval_chunks.csv")
     embed_chunks(chunks)
